@@ -3840,6 +3840,10 @@ float B(sPuncture puncture)
     {
         return 3.0f * 100.0f;
     }
+	else if (puncture.name == "bone")
+	{
+		return 30.0f * 100.05;
+	}
     else
     {
         return 3.0f * 100.0f;
