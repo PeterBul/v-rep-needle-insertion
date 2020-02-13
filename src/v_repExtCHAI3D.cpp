@@ -2520,6 +2520,12 @@ VREP_DLLEXPORT void* v_repMessage(int message, int* auxiliaryData, void* customD
 				button = 3;
 		}
 
+		updateNeedleTipPos();
+		updateNeedleVelocity();
+		updateNeedleDirection();
+		checkPunctures();
+		checkContacts(2e-5);
+
 		// If a new button is clicked and the last button was not 0
 		// What does 0 mean? No button clicked?
 		if (prev_button != button && prev_button != 0)
@@ -2675,8 +2681,9 @@ VREP_DLLEXPORT void* v_repMessage(int message, int* auxiliaryData, void* customD
 			lwr_tip_external_F.setZero();
 			if (contact_points.size() > 0)
 			{
-				computeExternalForce(lwr_tip_external_F, lwr_tip_pos, contact_points, contact_normals[0], lwr_tip_LPF_vel); //! QUI
-
+				modelFriction("kelvin-voigt");
+				//computeExternalForce(lwr_tip_external_F, lwr_tip_pos, contact_points, contact_normals[0], lwr_tip_LPF_vel); //! QUI
+				/*
 				//! Retreive data to export in matlab
 				curr_DOP = tis.getDOP(contact_points[0], lwr_tip_pos, contact_normals[0]);
 				curr_layer_idx = tis.getLayerIDXFromDepth(contact_points[0], lwr_tip_pos, contact_normals[0]);
@@ -2734,6 +2741,7 @@ VREP_DLLEXPORT void* v_repMessage(int message, int* auxiliaryData, void* customD
 						lwr_tip_external_F.z() << ", " <<
 						'X' << "\n";
 				}
+				*/
 			}
 			computeGlobalForce();
 			
@@ -2967,6 +2975,8 @@ void computeGlobalForce(void)
 	{
 	case 1:
 		// Pos/Force-Pos (Non-uniform matrix port)
+		// lwr_tip_external force calculated in computeExternalForce
+		// Diff device LPF and LWR Tip LPF is the LPFiltered velocity difference of the device and the lwr_tip
 		F_mc = (K_m * lwr_tip_external_F) - (B_m * (device_LPF_vel - lwr_tip_LPF_vel));
 		break;
 	case 2:
