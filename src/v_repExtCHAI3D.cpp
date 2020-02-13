@@ -48,8 +48,23 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <chrono>
 #include <ctime>
 #include <ratio>
+#include <math.h>
 #include <queue>
 #include <vector>
+#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/Extreme_points_traits_adapter_3.h>
+#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/Surface_mesh.h>
+#include <CGAL/Extreme_points_traits_adapter_3.h>
+#include <CGAL/convex_hull_3.h>
+#include <CGAL/Vector_3.h>
+#include <vector>
+#include <fstream>
+#include <algorithm>
+typedef CGAL::Exact_predicates_inexact_constructions_kernel      K;
+typedef K::Point_3                                               Point_3;
+typedef CGAL::Surface_mesh<Point_3>                              Mesh;
+typedef K::Vector_3                                              Vector_3;
 using namespace std;
 
 #include "v_repExtCHAI3D.h"
