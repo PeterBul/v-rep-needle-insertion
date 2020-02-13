@@ -51,20 +51,20 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <math.h>
 #include <queue>
 #include <vector>
-#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
-#include <CGAL/Extreme_points_traits_adapter_3.h>
-#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
-#include <CGAL/Surface_mesh.h>
-#include <CGAL/Extreme_points_traits_adapter_3.h>
-#include <CGAL/convex_hull_3.h>
-#include <CGAL/Vector_3.h>
+//#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+//#include <CGAL/Extreme_points_traits_adapter_3.h>
+//#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+//#include <CGAL/Surface_mesh.h>
+//#include <CGAL/Extreme_points_traits_adapter_3.h>
+//#include <CGAL/convex_hull_3.h>
+//#include <CGAL/Vector_3.h>
 #include <vector>
 #include <fstream>
 #include <algorithm>
-typedef CGAL::Exact_predicates_inexact_constructions_kernel      K;
-typedef K::Point_3                                               Point_3;
-typedef CGAL::Surface_mesh<Point_3>                              Mesh;
-typedef K::Vector_3                                              Vector_3;
+//typedef CGAL::Exact_predicates_inexact_constructions_kernel      K;
+//typedef K::Point_3                                               Point_3;
+//typedef CGAL::Surface_mesh<Point_3>                              Mesh;
+//typedef K::Vector_3                                              Vector_3;
 using namespace std;
 
 #include "v_repExtCHAI3D.h"
@@ -202,7 +202,6 @@ Vector3f lwr_tip_external_F(0.0, 0.0, 0.0);
 
 // Tissue params
 VectorXf K;
-VectorXf B;
 VectorXf p_thick;
 VectorXf thick;
 
@@ -293,13 +292,12 @@ const float C_p = 10.57;                            // Positive dynamic friction
 const float C_n = -11.96;                           // Negative dynamic friction coefficient. Unit: N/m
 const float zero_threshold = 5.0e-6;                // (delta v/2 in paper) Threshold on static and dynamic fricion. Unit: m/s
 
-
-Point_3 toolTipPoint;
+Vector3f toolTipPoint;
 float needleVelocity;
-Vector_3 needleDirection;
+Vector3f needleDirection;
 float full_penetration_length;
 float f_ext_magnitude;
-Vector_3 f_ext;
+Vector3f f_ext;
 
 
 float friction_val = 0;
@@ -309,8 +307,8 @@ float z_resistance;
 
 struct sPuncture {
     int handle;
-    Point_3 position;
-    Vector_3 direction;
+    Vector3f position;
+    Vector3f direction;
     std::string name;
     float penetration_length;
 
@@ -320,8 +318,8 @@ struct sPuncture {
         } else {
             std::cout << "Exit puncture: " << name << std::endl;
         }
-        std::cout << "Position: " << position.x() << ", " << position.y() << ", " << position.z() << std::endl;
-        std::cout << "Direction: " << direction.x() << ", " << direction.y() << ", " << direction.z() << std::endl;
+        std::cout << "Position: " << position(0) << ", " << position(1) << ", " << position(2) << std::endl;
+        std::cout << "Direction: " << direction(0) << ", " << direction(1) << ", " << direction(2) << std::endl;
     }
 };
 
@@ -332,7 +330,7 @@ std::map<int,int> crashCount;
 float sgn(float x);
 float karnoppFriction();
 void modelFriction(std::string = "kelvin-voigt");
-float distance3d(Point_3 point1, Point_3 point2);
+float distance3d(Vector3f point1, Vector3f point2);
 float getVelocityMagnitude(simFloat* velocities);
 void checkVirtualFixture();
 void setRespondable(int handle);
@@ -344,7 +342,7 @@ void updateNeedleDirection();
 void updateNeedleTipPos();
 void updateNeedleVelocity();
 float kelvinVoigtModel();
-Vector_3 simObjectMatrix2Vector_3Direction(const float* objectMatrix);
+Vector3f simObjectMatrix2EigenDirection(const float* objectMatrix);
 void checkContacts(float forceMagnitudeThreshold);
 float checkSinglePuncture(sPuncture puncture);
 
@@ -3557,7 +3555,7 @@ sPuncture getPunctureFromHandle(int handle)
     return puncture;
 }
 
-sPuncture getPunctureFromName(std::string name)
+sPuncture getPunctureFromName(string name)
 {
     for (sPuncture puncture : punctures)
     {
@@ -3609,18 +3607,18 @@ void checkPunctures()
 
 void setRespondable(int handle)
 {
-    simSetObjectInt32Parameter(handle, RESPONDABLE, 1);
+    simSetObjectInt32Parameter(handle, sim_shapeintparam_respndable, 1);
 }
 
 void setUnRespondable(int handle)
 {
-    simSetObjectInt32Parameter(handle, RESPONDABLE, 0);
+    simSetObjectInt32Parameter(handle, sim_shapeintparam_respondable, 0);
 }
 
 float checkSinglePuncture(sPuncture puncture) {
-    Vector_3 current_translation = Vector_3(puncture.position, toolTipPoint);
+    Vector3f current_translation = puncture.position - toolTipPoint;
     // If the dot product of the two vectors are positive, we are still in the tissue.
-    if (CGAL::scalar_product(current_translation, puncture.direction) >= -1e-6)
+    if (current_translation.dot(puncture.direction)) >= -1e-6)
         return 1.0;
     return -1;
 }
@@ -3637,7 +3635,7 @@ void updateNeedleDirection()
 {
     simFloat objectMatrix[12];
     simGetObjectMatrix(needleTipHandle, -1, objectMatrix);
-    needleDirection = simObjectMatrix2Vector_3Direction(objectMatrix);
+    needleDirection = simObjectMatrix2EigenDirection(objectMatrix);
 
 }
 
@@ -3645,7 +3643,7 @@ void updateNeedleTipPos()
 {
     float needleTipPos[3];
     simGetObjectPosition(needleTipHandle, -1, needleTipPos);
-    toolTipPoint = Point_3(needleTipPos[0], needleTipPos[1], needleTipPos[2]);
+    toolTipPoint = Vector3f(needleTipPos[0], needleTipPos[1], needleTipPos[2]);
 }
 
 void addPuncture(int handle)
@@ -3654,7 +3652,7 @@ void addPuncture(int handle)
     simGetObjectMatrix(needleHandle, -1, needleMatrix);
     sPuncture puncture;
     puncture.position = toolTipPoint;
-    puncture.direction = Vector_3(needleMatrix[2], needleMatrix[6], needleMatrix[10]);
+    puncture.direction = Vector3f(needleMatrix[2], needleMatrix[6], needleMatrix[10]);
     puncture.handle = handle;
     puncture.name = simGetObjectName(handle);
     puncture.penetration_length = punctureLength(puncture);
@@ -3720,9 +3718,8 @@ void modelFriction(std::string model) {
     f_ext = f_ext_magnitude * needleDirection;
 }
 
-float distance3d(Point_3 point1, Point_3 point2){
-    Vector_3 vector = Vector_3(point1, point2);
-    return vector.squared_length();
+float distance3d(Vector3f point1, Vector3f point2){
+    return (point1 - point2).norm();
 }
 
 float getVelocityMagnitude(simFloat* velocities) {
@@ -3875,7 +3872,7 @@ float kelvinVoigtModel(){
     return f_magnitude;
 }
 
-Vector_3 simObjectMatrix2Vector_3Direction(const float* objectMatrix)
+Vector3f simObjectMatrix2EigenDirection(const float* objectMatrix)
 {
-    return Vector_3(objectMatrix[2], objectMatrix[6], objectMatrix[10]);
+    return Vector3f(objectMatrix[2], objectMatrix[6], objectMatrix[10]);
 }
