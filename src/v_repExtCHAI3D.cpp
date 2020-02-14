@@ -305,6 +305,8 @@ float x_resistance;
 float y_resistance;
 float z_resistance;
 
+float force_max = 0.0;
+
 struct sPuncture {
     int handle;
     Vector3f position;
@@ -3607,7 +3609,7 @@ void checkPunctures()
 
 void setRespondable(int handle)
 {
-    simSetObjectInt32Parameter(handle, sim_shapeintparam_respndable, 1);
+    simSetObjectInt32Parameter(handle, sim_shapeintparam_respondable, 1);
 }
 
 void setUnRespondable(int handle)
@@ -3618,7 +3620,7 @@ void setUnRespondable(int handle)
 float checkSinglePuncture(sPuncture puncture) {
     Vector3f current_translation = puncture.position - toolTipPoint;
     // If the dot product of the two vectors are positive, we are still in the tissue.
-    if (current_translation.dot(puncture.direction)) >= -1e-6)
+    if (current_translation.dot(puncture.direction) >= -1e-6)
         return 1.0;
     return -1;
 }
