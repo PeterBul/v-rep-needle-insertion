@@ -372,14 +372,9 @@ void updatePosPenetration(void); // o.O
 void updatePose(void);
 void getOffset(void);
 void updateRobotPose(int target_handler, Vector3f target_lin_vel, Vector3f target_ang_vel);
-void manageContact(void);
 
 // Force functions
 void computeGlobalForce(void);
-void computeExternalForce(Vector3f& ext_F, const Vector3f& LWR_tip_pos,
-	const Vector3fVector& contact_pos_vector,
-	const Vector3f& contact_N,
-	const Vector3f& LWR_tip_velocity);
 
 // Filtering
 void filterVelocity(Vector3fVector& v_vector, 
@@ -2280,10 +2275,6 @@ VREP_DLLEXPORT void* v_repMessage(int message, int* auxiliaryData, void* customD
 	simSetIntegerParameter(sim_intparam_error_report_mode, errorModeSaved);
 
 
-	// Reading values put by the user in the 2 UIs.
-	readUI();
-	readLayersUI();
-
 
 	// ------------------------------------------------------------------------- //
 	// ------------------ WHEN THE USER CLICKS THE PLAY BUTTON ------------------//
@@ -2389,60 +2380,6 @@ VREP_DLLEXPORT void* v_repMessage(int message, int* auxiliaryData, void* customD
 		eigen2SimTransf(temp, scaled_device_T);
 		simSetObjectMatrix(dummy_handler, -1, scaled_device_T);
 
-		// TISSUE INIT					Peter: I have commented this out because we don't have any of the tissue structure anymore
-		/*Vector3f tissue_center;
-		Vector2f tissue_scale;
-		tissue_center << 0.15f, 0.5f, 0.37f;
-		tissue_scale << 0.2f, 0.22f;
-		tis.init();
-
-		Vector3fVector colors;
-		colors = { Vector3f(1.0f, 0.76f, 0.51f),
-			Vector3f(1.0f, 1.0f, 0.51f),
-			Vector3f(0.77f, 0.3f, 0.3f),
-			Vector3f(1.0f, 1.0f, 0.81f) };
-
-
-
-		if (use_default_tissue_values)
-		{
-			tis.addLayer("Skin",	0.12f * 0.3f,	331.0f	/ 10.0f,		3.0f * 50.0f,	0.4f,	Vector3f(1.0f, 0.76f, 0.51f));
-			tis.addLayer("Fat",		0.13f * 0.3f,	83.0f	/ 10.0f,		1.0f * 50.0f,	0.1f,	Vector3f(1.0f, 1.0f, 0.51f));
-			tis.addLayer("Muscle",	0.14f * 0.3f,	497.0f	/ 10.0f,		3.0f * 50.0f,	0.25f,	Vector3f(0.77f, 0.3f, 0.3f));
-			tis.addLayer("Bone",	0.12f * 0.3f,	1300.0f	/ 20.0f,		0.0f * 50.0f,	0.9f,	Vector3f(1.0f, 1.0f, 0.81f));
-			//tis.addLayer("Bone", 0.12f * 0.2f, 2480.0f / 100.0f, 0.0f * 10.0f, 0.9f, Vector3f(1.0f, 1.0f, 0.81f));
-		}
-		else
-		{
-			for (unsigned int i = 0; i < UI_layers_names.size(); i++)
-				tis.addLayer(UI_layers_names[i],
-					UI_thick_vec(i) * 1000.0f,
-					UI_K_vec(i) / 100.0f,
-					UI_B_vec(i) * 10.0f,
-					UI_p_t_p_vec(i),
-					colors[i]);
-		}
-
-
-		tis.setTissueCenter(tissue_center);
-		tis.setScale(tissue_scale(0), tissue_scale(1));
-		
-		tis.printTissue();
-		tis.renderLayers();
-		tis.getAllLayerParam(thick, K, B, p_thick);
-
-		// Add a plane to substain the tissues
-		float plane_color[3] = { 0.6f, 0.3f, 0.0f };
-		//float trasparency[1] = { 0.2f };
-		float tissue_depth = tis.getTotalDepth();
-		float plane_size[3] = { tissue_scale(0) * 2.0f, tissue_scale(1) * 2.0f, 0.04f };
-		float plane_pos[3] = { tissue_center(0), tissue_center(1), tissue_center(2) - tissue_depth * 0.5f - plane_size[2] * 0.5f };
-		int plane_handler = simCreatePureShape(0, 1 + 4 + 8 + 16, plane_size, 1.0f, NULL);
-		simSetObjectPosition(plane_handler, -1, plane_pos);
-		simSetShapeColor(plane_handler, NULL, sim_colorcomponent_ambient_diffuse, plane_color);
-		//simSetShapeColor(plane_handler, NULL, sim_colorcomponent_transparency, trasparency);
-		simSetObjectName(plane_handler, "Desk");
-		*/
 
 		// retrieve JOINT HANDLERS
 		std::string temp_name;
@@ -2461,12 +2398,10 @@ VREP_DLLEXPORT void* v_repMessage(int message, int* auxiliaryData, void* customD
 			simGetJointPosition(lwr_joint_handlers[i], &sim_lwr_init_q[i]);
 		sim2EigenVec7f(sim_lwr_init_q, lwr_init_q);
 
-		file_DOP_force.open("00_GEOMAGIC_file_DOP_force.txt");
 		file_time_forces.open("01_GEOMAGIC_file_time_forces.txt");
 		file_perforation_error.open("02_GEOMAGIC_file_perforation_error.txt");
 		file_contacts_error.open("03_GEOMAGIC_file_contacts_error.txt");
 
-		file_DOP_force << "DOP, Force\n";
 		file_time_forces << "Time, F.x, F.y, F.z, Key\n";
 		file_perforation_error << "Time, Error [mm]\n";
 		file_contacts_error << "Time, Error [mm]\n";
@@ -2506,8 +2441,6 @@ VREP_DLLEXPORT void* v_repMessage(int message, int* auxiliaryData, void* customD
 		std::chrono::duration<double> delta_t;
 		float perforation_error;
 		float contact_error;
-		float curr_DOP;
-		int curr_layer_idx;
 		float th = 0;
 		float rel_th = 0;
 
@@ -2540,7 +2473,6 @@ VREP_DLLEXPORT void* v_repMessage(int message, int* auxiliaryData, void* customD
 
 		// Se sei nel tessuto costringi il bottone ad essere 3;
 		// If you are in the tissue, you force the button to be 3
-		int current_layer_IDX = -1;
 		if (contact_points.size() != 0)
 		{
 			//current_layer_IDX = tis.getLayerIDXFromDepth(contact_points[0], lwr_tip_pos, contact_normals[0]);
@@ -2720,75 +2652,13 @@ VREP_DLLEXPORT void* v_repMessage(int message, int* auxiliaryData, void* customD
 			//updatePose();
 			//updatePosPenetration();
 			//updateRobotPose(lwr_target_handler, lwr_tip_LPF_vel, lwr_tip_LPF_omega);
-			manageContact();
 			lwr_tip_external_F.setZero();
 			if (contact_points.size() > 0)
 			{
 				modelExternalForces("kelvin-voigt");
-				//computeExternalForce(lwr_tip_external_F, lwr_tip_pos, contact_points, contact_normals[0], lwr_tip_LPF_vel); //! QUI
-				/*
-				//! Retreive data to export in matlab
-				curr_DOP = tis.getDOP(contact_points[0], lwr_tip_pos, contact_normals[0]);
-				curr_layer_idx = tis.getLayerIDXFromDepth(contact_points[0], lwr_tip_pos, contact_normals[0]);
-				th = 0;
-				rel_th = 0;
-
-				if ((GetAsyncKeyState('a') & 0x8000)
-					|| (GetAsyncKeyState('A') & 0x8000))
-				{
-					//! write into contact file
-					for (int i = 0; i < curr_layer_idx; i++)
-						th += thick(i);
-					contact_error = th - curr_DOP;
-					t_1 = std::chrono::high_resolution_clock::now();
-					delta_t = std::chrono::duration_cast<std::chrono::duration<double>>(t_1 - t_0);
-					file_contacts_error << delta_t.count() << ", " << contact_error << "\n";
-
-					//! Write into time-forces file
-					file_time_forces << delta_t.count() << ", " <<
-						lwr_tip_external_F.x() << ", " <<
-						lwr_tip_external_F.y() << ", " <<
-						lwr_tip_external_F.z() << ", " <<
-						'A' << "\n";
-				}
-				else if ((GetAsyncKeyState('s') & 0x8000)
-					|| (GetAsyncKeyState('S') & 0x8000))
-				{
-					//! write into perforation file
-					for (int i = 0; i < curr_layer_idx; i++)
-						rel_th += thick(i);
-					rel_th += p_thick(curr_layer_idx);
-					perforation_error = rel_th - curr_DOP;
-
-					t_1 = std::chrono::high_resolution_clock::now();
-					delta_t = std::chrono::duration_cast<std::chrono::duration<double>>(t_1 - t_0);
-
-					file_perforation_error << delta_t.count() << ", " << perforation_error << "\n";
-
-					//! Write into time-forces file
-					file_time_forces << delta_t.count() << ", " <<
-						lwr_tip_external_F.x() << ", " <<
-						lwr_tip_external_F.y() << ", " <<
-						lwr_tip_external_F.z() << ", " <<
-						'S' << "\n";
-				}
-				else
-				{
-					t_1 = std::chrono::high_resolution_clock::now();
-					delta_t = std::chrono::duration_cast<std::chrono::duration<double>>(t_1 - t_0);
-
-					//! Write into time-forces file
-					file_time_forces << delta_t.count() << ", " <<
-						lwr_tip_external_F.x() << ", " <<
-						lwr_tip_external_F.y() << ", " <<
-						lwr_tip_external_F.z() << ", " <<
-						'X' << "\n";
-				}
-				*/
 			}
 			computeGlobalForce();
 			
-
 			break;
 		default:
 			first_press = true;
@@ -3119,106 +2989,6 @@ void LPFilter(Vector3fVector& v_vector, Vector3f& new_vel, Vector3fVector& mean_
 }
 
 
-
-
-void readUI(void)
-{
-
-	UI_handler = simGetUIHandle("UI");
-
-	button_handler = simGetUIEventButton(UI_handler, aux_val);
-
-	switch (button_handler)
-	{
-	case 3:
-		controller_ID = 1;
-		current_controller = simGetUIButtonLabel(UI_handler, button_handler);
-		simSetUIButtonLabel(UI_handler, 27, current_controller, NULL);
-		break;
-	case 12:
-		controller_ID = 2;
-		current_controller = simGetUIButtonLabel(UI_handler, button_handler);
-		simSetUIButtonLabel(UI_handler, 27, current_controller, NULL);
-		break;
-	case 21:
-		controller_ID = 3;
-		current_controller = simGetUIButtonLabel(UI_handler, button_handler);
-		simSetUIButtonLabel(UI_handler, 27, current_controller, NULL);
-		break;
-	case 39:
-		if (simGetSimulationState() == sim_simulation_advancing_running)
-			simStopSimulation();
-
-		cout << "Check Values" << endl;
-		checkAndSetValues(controller_ID, UI_handler);
-		simStartSimulation();
-		break;
-	default:
-		break;
-	}
-}
-
-
-void readLayersUI(void)
-{
-
-	int size = UI_layers_names.size();
-	LayersUI_handler = simGetUIHandle("UI0");
-	button_handler = simGetUIEventButton(LayersUI_handler, aux_val);
-
-	float tmp[4] = {0.0f,0.0f,0.0f,0.0f};
-	
-	switch (button_handler)
-	{
-	case 14: 
-		use_default_tissue_values = true;
-		break;
-	case 8:
-		readLayerParams(UI_layer_idx, tmp, LayersUI_handler);
-		UI_layer_idx = (UI_layer_idx + size -1) % size;
-		yellow();
-		cout << UI_layer_idx << endl;
-		reset();
-		loadLayerParams(UI_layer_idx);
-		break;
-	case 9:
-		cout << "pre read" << endl;
-		readLayerParams(UI_layer_idx, tmp, LayersUI_handler);
-		UI_layer_idx = (UI_layer_idx + 1) % size;
-		yellow();
-		cout << UI_layer_idx << endl;
-		reset();
-		loadLayerParams(UI_layer_idx);
-		break;
-	default:
-		break;
-	}
-
-
-}
-
-void loadLayerParams(int layer_idx)
-{
-	simSetUIButtonLabel(LayersUI_handler, 3, UI_layers_names[layer_idx].c_str(), NULL);
-	simSetUIButtonLabel(LayersUI_handler, 10, std::to_string(UI_thick_vec(layer_idx)).c_str(), NULL);
-	simSetUIButtonLabel(LayersUI_handler, 11, std::to_string(UI_K_vec(layer_idx)).c_str(), NULL);
-	simSetUIButtonLabel(LayersUI_handler, 12, std::to_string(UI_B_vec(layer_idx)).c_str(), NULL);
-	simSetUIButtonLabel(LayersUI_handler, 13, std::to_string(UI_p_t_p_vec(layer_idx)).c_str(), NULL);
-}
-
-void readLayerParams(int layer_idx, float* tmp, int UI_handler)
-{
-	checkValues(10, 13, tmp, 0.50, UI_handler);
-	green();
-	cout << "check done" << endl;
-	UI_thick_vec(layer_idx) = tmp[0];
-	UI_K_vec(layer_idx) = tmp[1];
-	UI_B_vec(layer_idx) = tmp[2];
-	UI_p_t_p_vec(layer_idx) = tmp[3];
-
-	reset();
-}
-
 void checkAndSetValues(int ID, int UI_handler)
 {
 	float tmp[3];
@@ -3289,173 +3059,6 @@ void checkValues(int init_val, int fin_val, float* param, float default_value, i
 }
 
 
-//! RICORDA CHE DEVI USARE LWR TIP PER POSIZIONE E VELOCITA'
-// Forces on the dummy (PENETRATION)
-void computeExternalForce(Vector3f& ext_F, const Vector3f& LWR_tip_pos, 
-	const Vector3fVector& contact_pos_vector, 
-	const Vector3f& contact_N,
-	const Vector3f& LWR_tip_velocity)
-{
-	//! Force direction
-	Vector3f F_dir;
-	Matrix4f dummy_T;
-
-	float sim_dummy_T[12];
-
-	simGetObjectMatrix(dummy_handler, -1, sim_dummy_T);
-	sim2EigenTransf(sim_dummy_T, dummy_T);
-
-	F_dir = dummy_T.block<3, 1>(0, 0);
-
-	//! Force magnitude
-	VectorXf K;
-	VectorXf B;
-	VectorXf p_thick;
-	VectorXf thick;
-
-	float needle_penetration;
-	float F_magnitude = 0.0f;
-	float DOP = tis.getDOP(contact_pos_vector[0], LWR_tip_pos, contact_N);
-	int current_layer_IDX = tis.getLayerIDXFromDepth(contact_pos_vector[0], LWR_tip_pos, contact_N);
-
-	tis.getAllLayerParam(thick, K, B, p_thick);
-	switch (current_layer_IDX)
-	{
-	// If the needle is in the skin
-	case 0:
-		needle_penetration = (LWR_tip_pos - contact_pos_vector[0]).norm();
-		if (!tis.checkPerforation("Skin"))
-		{
-			F_magnitude = K(0) * needle_penetration;
-
-			if (DOP > p_thick[0])
-			{
-				tis.togglePerforation("Skin");
-				red();
-				cout << "PERFORATED SKIN" << endl;
-				reset();
-			}
-		}
-		if (tis.checkPerforation("Skin"))
-			F_magnitude = B(0) * needle_penetration * LWR_tip_velocity.norm();
-		break;
-
-	// If the needle is in the fat
-	case 1:
-		needle_penetration = (LWR_tip_pos - contact_pos_vector[1]).norm();
-		if (!tis.checkPerforation("Fat"))
-		{
-			F_magnitude = K(1) * needle_penetration + 
-				B(0) * thick(0) * LWR_tip_velocity.norm();
-
-			if (DOP > thick[0] + p_thick[1])
-			{
-				tis.togglePerforation("Fat");
-				blue();
-				cout << "PERFORATED FAT" << endl;
-				reset();
-			}
-		}
-		if (tis.checkPerforation("Fat"))
-			F_magnitude = (B(0) * thick(0) + B(1) * needle_penetration) * LWR_tip_velocity.norm();
-		break;
-
-	// If the needle is in the fat
-	case 2:
-		needle_penetration = (LWR_tip_pos - contact_pos_vector[2]).norm();
-		if (!tis.checkPerforation("Muscle"))
-		{
-			F_magnitude = K(2) * needle_penetration +
-				(B(0) * thick(0) + B(1) * thick(1)) * LWR_tip_velocity.norm();
-
-			if (DOP > thick[0] + thick[1] + p_thick[2])
-			{
-				tis.togglePerforation("Muscle");
-				yellow();
-				cout << "PERFORATED MUSCLE" << endl;
-				reset();
-			}
-		}
-		if (tis.checkPerforation("Muscle"))
-			F_magnitude = (B(0) * thick(0) + B(1) * thick(1) + B(2) * needle_penetration) * LWR_tip_velocity.norm();
-		break;
-
-		// If the needle is in the bone
-	case 3:
-		needle_penetration = (LWR_tip_pos - contact_pos_vector[3]).norm();
-		if (!tis.checkPerforation("Bone"))
-		{
-			F_magnitude = K(3) * needle_penetration +
-				(B(0) * thick(0) + B(1) * thick(1) + B(2) * thick(2)) * LWR_tip_velocity.norm();
-		}
-		break;
-
-	default:
-		break;
-	}
-
-
-	ext_F = F_magnitude * F_dir;
-
-	simSetGraphUserData(ext_force_graph_handler, "Ext_F_x", (float)ext_F.x());
-	simSetGraphUserData(ext_force_graph_handler, "Ext_F_y", (float)ext_F.y());
-	simSetGraphUserData(ext_force_graph_handler, "Ext_F_z", (float)ext_F.z());
-	simSetGraphUserData(ext_force_graph_handler, "Ext_F_MAGN", (float)F_magnitude);
-
-	simSetGraphUserData(force_displ_graph_handler, "dop", (float)DOP);
-	simSetGraphUserData(force_displ_graph_handler, "force", (float)F_magnitude);
-	file_DOP_force << DOP << ", " << F_magnitude << "\n";
-
-	return;
-}
-
-void manageContact(void)
-{
-	//objects_in_contact contact_point;
-	if (objects_in_contact[1] == tis.getLayerHandler("Skin", true))
-	{
-		contact_points.push_back(contact_point);
-		contact_normals.push_back(contact_normal);
-		tis.removeDynamicLayer("Skin");
-		tis.toggleTouched("Skin");
-
-		//END
-		objects_in_contact[1] = -1;
-	}
-	else if (objects_in_contact[1] == tis.getLayerHandler("Fat", true))
-	{
-		contact_points.push_back(contact_point);
-		contact_normals.push_back(contact_normal);
-		tis.removeDynamicLayer("Fat");
-		tis.toggleTouched("Fat");
-
-		//END
-		objects_in_contact[1] = -1;
-	}
-	else if (objects_in_contact[1] == tis.getLayerHandler("Muscle", true))
-	{
-		contact_points.push_back(contact_point);
-		contact_normals.push_back(contact_normal);
-		tis.removeDynamicLayer("Muscle");
-		tis.toggleTouched("Muscle");
-
-		//END
-		objects_in_contact[1] = -1;
-	}
-	else if (objects_in_contact[1] == tis.getLayerHandler("Bone", true))
-	{
-		contact_points.push_back(contact_point);
-		contact_normals.push_back(contact_normal);
-		tis.removeDynamicLayer("Bone");
-		tis.toggleTouched("Bone");
-
-		//END
-		objects_in_contact[1] = -1;
-	}
-	else
-		return;
-		//tis.printTissue();
-}
 
 void moveFakeDevice(DeviceState& state)
 {
