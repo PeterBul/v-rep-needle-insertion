@@ -17,7 +17,7 @@ void Tissue::init(void)
 {
 	_dummy_rederer_handler = simCreateDummy(0.05f, NULL);
 	simSetObjectName(_dummy_rederer_handler, "Tissue_D");
-	simSetObjectInt32Parameter(_dummy_rederer_handler, sim_objintparam_visibility_layer, 0);
+	simSetObjectIntParameter(_dummy_rederer_handler, sim_objectproperty_selectinvisible, 0);
 	return;
 }
 
