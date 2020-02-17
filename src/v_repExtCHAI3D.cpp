@@ -3678,10 +3678,12 @@ int checkSinglePuncture(sPuncture puncture) {
 */
 void updateNeedleVelocity()														// To add Low-pass filter, I think a good place to add it would be here.
 {
-	simFloat needleVelocities[3];
-	if (simGetObjectVelocity(lwrTipHandle, needleVelocities, NULL) == -1)
+	simFloat tmp_needleVelocity[3];
+	simFloat tmp_angVelocity[3];
+	
+	if (simGetObjectVelocity(lwrTipHandle, tmp_needleVelocity, tmp_angVelocity) == -1)
 		std::cerr << "Needle tip velocity retrieval failed" << std::endl;
-	needleVelocity = getVelocityMagnitude(needleVelocities);
+	needleVelocity = getVelocityMagnitude(tmp_needleVelocity);
 }
 
 /**
