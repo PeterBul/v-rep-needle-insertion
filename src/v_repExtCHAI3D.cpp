@@ -301,6 +301,7 @@ bool use_only_z_force_on_engine = true;				// When using the engine for both che
 bool constant_puncture_threshold = false;			// Use the same puncture threshold for all tissues.
 float puncture_threshold = 1.0e-2;					// Set constant puncture threshold (only used if constant_puncture_threshold==true)
 
+const float needle_radius = 2e-3;
 													// State variables
 bool virtual_fixture = false;						// Is the needle in the tissue/ should the virtual fixture be activated?
 float needleVelocity;
@@ -346,7 +347,8 @@ void updateNeedleDirection();
 void updateNeedleTipPos();
 void updateNeedleVelocity();
 int checkSinglePuncture(sPuncture puncture);
-float B(sPuncture puncture);
+float mu(sPuncture puncture);
+float A(float x);
 float distance3d(Vector3f point1, Vector3f point2);
 float generalForce2NeedleTipZ(Vector3f force);
 float KThresh(std::string tissueName);
@@ -376,10 +378,6 @@ void manageContact(void);
 
 // Force functions
 void computeGlobalForce(void);
-void computeExternalForce(Vector3f& ext_F, const Vector3f& LWR_tip_pos,
-	const Vector3fVector& contact_pos_vector,
-	const Vector3f& contact_N,
-	const Vector3f& LWR_tip_velocity);
 
 // Filtering
 void filterVelocity(Vector3fVector& v_vector, 
@@ -3289,126 +3287,6 @@ void checkValues(int init_val, int fin_val, float* param, float default_value, i
 }
 
 
-//! RICORDA CHE DEVI USARE LWR TIP PER POSIZIONE E VELOCITA'
-// Forces on the dummy (PENETRATION)
-void computeExternalForce(Vector3f& ext_F, const Vector3f& LWR_tip_pos, 
-	const Vector3fVector& contact_pos_vector, 
-	const Vector3f& contact_N,
-	const Vector3f& LWR_tip_velocity)
-{
-	//! Force direction
-	Vector3f F_dir;
-	Matrix4f dummy_T;
-
-	float sim_dummy_T[12];
-
-	simGetObjectMatrix(dummy_handler, -1, sim_dummy_T);
-	sim2EigenTransf(sim_dummy_T, dummy_T);
-
-	F_dir = dummy_T.block<3, 1>(0, 0);
-
-	//! Force magnitude
-	VectorXf K;
-	VectorXf B;
-	VectorXf p_thick;
-	VectorXf thick;
-
-	float needle_penetration;
-	float F_magnitude = 0.0f;
-	float DOP = tis.getDOP(contact_pos_vector[0], LWR_tip_pos, contact_N);
-	int current_layer_IDX = tis.getLayerIDXFromDepth(contact_pos_vector[0], LWR_tip_pos, contact_N);
-
-	tis.getAllLayerParam(thick, K, B, p_thick);
-	switch (current_layer_IDX)
-	{
-	// If the needle is in the skin
-	case 0:
-		needle_penetration = (LWR_tip_pos - contact_pos_vector[0]).norm();
-		if (!tis.checkPerforation("Skin"))
-		{
-			F_magnitude = K(0) * needle_penetration;
-
-			if (DOP > p_thick[0])
-			{
-				tis.togglePerforation("Skin");
-				red();
-				cout << "PERFORATED SKIN" << endl;
-				reset();
-			}
-		}
-		if (tis.checkPerforation("Skin"))
-			F_magnitude = B(0) * needle_penetration * LWR_tip_velocity.norm();
-		break;
-
-	// If the needle is in the fat
-	case 1:
-		needle_penetration = (LWR_tip_pos - contact_pos_vector[1]).norm();
-		if (!tis.checkPerforation("Fat"))
-		{
-			F_magnitude = K(1) * needle_penetration + 
-				B(0) * thick(0) * LWR_tip_velocity.norm();
-
-			if (DOP > thick[0] + p_thick[1])
-			{
-				tis.togglePerforation("Fat");
-				blue();
-				cout << "PERFORATED FAT" << endl;
-				reset();
-			}
-		}
-		if (tis.checkPerforation("Fat"))
-			F_magnitude = (B(0) * thick(0) + B(1) * needle_penetration) * LWR_tip_velocity.norm();
-		break;
-
-	// If the needle is in the fat
-	case 2:
-		needle_penetration = (LWR_tip_pos - contact_pos_vector[2]).norm();
-		if (!tis.checkPerforation("Muscle"))
-		{
-			F_magnitude = K(2) * needle_penetration +
-				(B(0) * thick(0) + B(1) * thick(1)) * LWR_tip_velocity.norm();
-
-			if (DOP > thick[0] + thick[1] + p_thick[2])
-			{
-				tis.togglePerforation("Muscle");
-				yellow();
-				cout << "PERFORATED MUSCLE" << endl;
-				reset();
-			}
-		}
-		if (tis.checkPerforation("Muscle"))
-			F_magnitude = (B(0) * thick(0) + B(1) * thick(1) + B(2) * needle_penetration) * LWR_tip_velocity.norm();
-		break;
-
-		// If the needle is in the bone
-	case 3:
-		needle_penetration = (LWR_tip_pos - contact_pos_vector[3]).norm();
-		if (!tis.checkPerforation("Bone"))
-		{
-			F_magnitude = K(3) * needle_penetration +
-				(B(0) * thick(0) + B(1) * thick(1) + B(2) * thick(2)) * LWR_tip_velocity.norm();
-		}
-		break;
-
-	default:
-		break;
-	}
-
-
-	ext_F = F_magnitude * F_dir;
-
-	simSetGraphUserData(ext_force_graph_handler, "Ext_F_x", (float)ext_F.x());
-	simSetGraphUserData(ext_force_graph_handler, "Ext_F_y", (float)ext_F.y());
-	simSetGraphUserData(ext_force_graph_handler, "Ext_F_z", (float)ext_F.z());
-	simSetGraphUserData(ext_force_graph_handler, "Ext_F_MAGN", (float)F_magnitude);
-
-	simSetGraphUserData(force_displ_graph_handler, "dop", (float)DOP);
-	simSetGraphUserData(force_displ_graph_handler, "force", (float)F_magnitude);
-	file_DOP_force << DOP << ", " << F_magnitude << "\n";
-
-	return;
-}
-
 void manageContact(void)
 {
 	//objects_in_contact contact_point;
@@ -3604,7 +3482,12 @@ sPuncture getPunctureFromName(std::string name)
 */
 float punctureLength(sPuncture puncture)
 {
-	return distance3d(puncture.position, toolTipPoint) * checkSinglePuncture(puncture);
+	Vector3f penetration = toolTipPoint - puncture.position;
+	if (puncture.direction.dot(penetration) > 0)
+		return penetration.norm();
+	else
+		return 0;
+
 }
 
 /**
@@ -3666,9 +3549,11 @@ void setUnRespondable(int handle)
 * @return 1 if still active, -1 if not.
 */
 int checkSinglePuncture(sPuncture puncture) {
-	Vector3f current_translation = puncture.position - toolTipPoint;
-	// If the dot product of the two vectors are positive (and not to negative because of edge case when distance is around 0), we are still in the tissue.
-	if (current_translation.dot(puncture.direction) >= -1)
+	Vector3f current_translation = toolTipPoint - puncture.position;
+	// Return 1 if the distance is close to 0.
+	if (current_translation.norm() < 1e-4)
+		return 1;
+	if (puncture.direction.dot(current_translation) >= 0)
 		return 1;
 	return -1;
 }
@@ -3693,7 +3578,7 @@ void updateNeedleDirection()
 {
 	simFloat objectMatrix[12];
 	simGetObjectMatrix(lwrTipHandle, -1, objectMatrix);
-	needleDirection = simObjectMatrix2EigenDirection(objectMatrix);
+	needleDirection = simObjectMatrix2EigenDirection(objectMatrix).normalized();
 
 }
 
@@ -3713,11 +3598,9 @@ void updateNeedleTipPos()
 */
 void addPuncture(int handle)
 {
-	float needleMatrix[12];
-	simGetObjectMatrix(needleHandle, -1, needleMatrix);
 	sPuncture puncture;
 	puncture.position = toolTipPoint;
-	puncture.direction = Vector3f(needleMatrix[2], needleMatrix[6], needleMatrix[10]);
+	puncture.direction = needleDirection;
 	puncture.handle = handle;
 	puncture.name = simGetObjectName(handle);
 	puncture.penetration_length = punctureLength(puncture);
@@ -3807,7 +3690,7 @@ void modelExternalForces(std::string model) {
 	// Shouldn't we rather map all the calculated forces onto the z direction of the needle? The other directions should be handled by the virtual fixture.
 	float dummy_object_matrix[12];
 	simGetObjectMatrix(dummyHandle, -1, dummy_object_matrix);
-	Vector3f dummy_dir = simObjectMatrix2EigenDirection(dummy_object_matrix);
+	Vector3f dummy_dir = simObjectMatrix2EigenDirection(dummy_object_matrix).normalized();
 	f_ext = f_ext_magnitude * dummy_dir; // Should we normalize dir?				Peter: Multiplying with dummy dir creates equal force in all directions of the dummy. Is this right?
 }
 
@@ -3882,7 +3765,7 @@ float karnoppModel()
 	return -1;
 }
 
-float B(sPuncture puncture)
+float mu(sPuncture puncture)
 {
 	if (puncture.name == "Fat")
 	{
@@ -3935,7 +3818,7 @@ float kelvinVoigtModel() {
 	float f_magnitude = 0.0;
 	for (auto puncture_it = punctures.begin(); puncture_it != punctures.end(); puncture_it++)
 	{
-		f_magnitude += (B(*puncture_it) * puncture_it->penetration_length);
+		f_magnitude += (mu(*puncture_it) * A(puncture_it->penetration_length));
 	}
 	f_magnitude *= needleVelocity;
 	return f_magnitude;
@@ -3975,4 +3858,9 @@ float generalForce2NeedleTipZ(Vector3f force)
 	simGetObjectMatrix(lwrTipHandle, -1, lwr_tip_object_matrix);
 	Vector3f lwr_tip_engine_force_tmp = changeBasis(lwr_tip_object_matrix, lwr_tip_enging_force);
 	return lwr_tip_engine_force_tmp.z();
+}
+
+float A(float x)
+{
+	return M_PI * needle_radius * x;
 }
