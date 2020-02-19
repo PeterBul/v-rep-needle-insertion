@@ -298,6 +298,7 @@ float model_force_scalar = 1.0;						// How much of the calculated force should 
 std::string force_model = "kelvin-voigt";			// Which model should be used to model the forces.
 bool use_only_z_force_on_engine = true;				// When using the engine for both checking punctures and calculating forces, 
 													// Should only z direction be used, or should the full magnitude.
+bool enable_exit_tissue = false;
 bool constant_puncture_threshold = false;			// Use the same puncture threshold for all tissues.
 float puncture_threshold = 1.0e-2;					// Set constant puncture threshold (only used if constant_puncture_threshold==true)
 
@@ -3513,9 +3514,13 @@ void checkPunctures()
 		}
 		else {
 			// The needle isn't puncturing this tissue anymore. Set tissue respondable and print.
-			setRespondable(it->handle);
-			full_penetration_length -= it->penetration_length;
-			it->printPuncture(false);
+			if (enable_exit_tissue)
+			{
+				setRespondable(it->handle);
+				full_penetration_length -= it->penetration_length;
+				it->printPuncture(false);
+			}
+			
 		}
 
 	}
@@ -3550,7 +3555,7 @@ void setUnRespondable(int handle)
 */
 int checkSinglePuncture(sPuncture puncture) {
 	Vector3f current_translation = toolTipPoint - puncture.position;
-	// Return 1 if the distance is close to 0.
+	// Return 1 if the distance is close to 0 so we get stability close to the puncture.
 	if (current_translation.norm() < 1e-4)
 		return 1;
 	if (puncture.direction.dot(current_translation) >= 0)
@@ -3718,7 +3723,7 @@ float getVelocityMagnitude(simFloat* velocity) {
 
 void setForceGraph()
 {
-	simSetGraphUserData(extForceGraphHandle, "measured_F", f_ext_magnitude);
+	simSetGraphUserData(needleForceGraphHandle, "external_force_magnitude", f_ext_magnitude);
 	float objectMatrixRefFrame[12];
 	simGetObjectMatrix(lwrTipHandle, -1, objectMatrixRefFrame);
 	Vector3f extf = changeBasis(objectMatrixRefFrame, lwr_tip_enging_force);
