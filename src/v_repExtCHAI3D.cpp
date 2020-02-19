@@ -298,7 +298,7 @@ float model_force_scalar = 1.0;						// How much of the calculated force should 
 std::string force_model = "kelvin-voigt";			// Which model should be used to model the forces.
 bool use_only_z_force_on_engine = true;				// When using the engine for both checking punctures and calculating forces, 
 													// Should only z direction be used, or should the full magnitude.
-bool enable_exit_tissue = false;
+bool enable_exit_tissue = true;
 bool constant_puncture_threshold = false;			// Use the same puncture threshold for all tissues.
 float puncture_threshold = 1.0e-2;					// Set constant puncture threshold (only used if constant_puncture_threshold==true)
 
@@ -341,6 +341,7 @@ void checkContacts();
 void checkPunctures();
 void modelExternalForces(std::string force_model);
 void reactivateTissues();
+void setAllTissuesRespondable();
 void setForceGraph();
 void setRespondable(int handle);
 void setUnRespondable(int handle);
@@ -2351,7 +2352,7 @@ VREP_DLLEXPORT void* v_repMessage(int message, int* auxiliaryData, void* customD
 
 		lwrTipHandle = simGetObjectHandle("LWR_tip");
 		full_penetration_length = 0.0;
-
+		setAllTissuesRespondable();
 
 		//! In order to unbound the angular error
 		lwr_tip_T.setZero();
@@ -3507,9 +3508,11 @@ void checkPunctures()
 			full_penetration_length += puncture_length;
 			// This penetration length might have been updated, so update.
 			it->penetration_length = puncture_length;
-			// Set punctures to be from the first puncture up until the current.
-			punctures = std::vector<sPuncture>(it, punctures.rend());
-			std::reverse(punctures.begin(), punctures.end());
+			if (enable_exit_tissue) {
+				// Set punctures to be from the first puncture up until the current.
+				punctures = std::vector<sPuncture>(it, punctures.rend());
+				std::reverse(punctures.begin(), punctures.end());
+			}
 			return;
 		}
 		else {
@@ -3525,7 +3528,8 @@ void checkPunctures()
 
 	}
 	// No punctures had length > 0
-	punctures.clear();
+	if(enable_exit_tissue)
+		punctures.clear();
 }
 
 
@@ -3868,4 +3872,16 @@ float generalForce2NeedleTipZ(Vector3f force)
 float A(float x)
 {
 	return M_PI * needle_radius * x;
+}
+
+void setAllTissuesRespondable()
+{
+	int idx = 0;
+	int tissueHandle = simGetObjectChild(phantomHandle, idx);
+	while (tissueHandle != -1)
+	{
+		setRespondable(tissueHandle);
+		idx++;
+		tissueHandle = simGetObjectChild(phantomHandle, idx);
+	}
 }
