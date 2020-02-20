@@ -281,9 +281,10 @@ int dummyToolTipHandle;								// The tool tip dummy that is used to move the ro
 int phantomHandle;
 int needleHandle;
 int needleTipHandle;
-int extForceGraphHandle;
+int forceGraphHandle;
 int lwrTipHandle;									// A dummy that is always connected to the needle tip.
 int needleForceGraphHandle;
+int penetrationLengthGraphHandle;
 
 // CoppeliaSim object parameter IDs
 const int RESPONDABLE = 3004;                       // Object parameter id for toggling respondable.
@@ -356,7 +357,7 @@ void checkPunctures();
 void modelExternalForces(std::string forceModel);
 void reactivateTissues();
 void setAllTissuesRespondable();
-void setForceGraph();
+void setGraphs();
 void setRespondable(int handle);
 void setUnRespondable(int handle);
 void updateNeedleDirection();
@@ -370,7 +371,6 @@ float generalForce2NeedleTipZ(Vector3f force);
 float KThresh(std::string tissueName);
 float karnoppModel();
 float kelvinVoigtModel();
-float getVelocityMagnitude(simFloat* velocity);
 float sgn(float x);
 Vector3f changeBasis(const float* objectMatrixReferenceFrame, Vector3f vector);
 Vector3f simContactInfo2EigenForce(const float* contactInfo);
@@ -2356,16 +2356,21 @@ VREP_DLLEXPORT void* v_repMessage(int message, int* auxiliaryData, void* customD
 
 
 		// Peter
+		// Handles
 		dummyHandle = simGetObjectHandle("Dummy_device");
 		dummyToolTipHandle = simGetObjectHandle("Dummy_tool_tip");
 		phantomHandle = simGetObjectHandle("_Phantom");
 		needleHandle = simGetObjectHandle("Needle");
 		needleTipHandle = simGetObjectHandle("Needle_tip");
-		extForceGraphHandle = simGetObjectHandle("Force_Graph");
-		needleForceGraphHandle = simGetObjectHandle("Needle_force_graph");
-
 		lwrTipHandle = simGetObjectHandle("LWR_tip");
+
+		forceGraphHandle = simGetObjectHandle("Force_Graph");
+		needleForceGraphHandle = simGetObjectHandle("Needle_force_graph");
+		penetrationLengthGraphHandle = simGetObjectHandle("Penetration_length_graph");
+
+		// Init full penetration to 0
 		fullPenetrationLength = 0.0;
+		// Init all tissues to respondable
 		setAllTissuesRespondable();
 
 		//! In order to unbound the angular error
@@ -2581,7 +2586,7 @@ VREP_DLLEXPORT void* v_repMessage(int message, int* auxiliaryData, void* customD
 
 		modelExternalForces(forceModel);
 
-		setForceGraph();
+		setGraphs();
 
 		// If a new button is clicked and the last button was not 0
 		// What does 0 mean? No button clicked?
@@ -3451,8 +3456,8 @@ void updateRobotPose(int target_handler, Vector3f target_lin_vel, Vector3f targe
 
 // ------------------------------------------------------------------------- //
 // ------------------------------------------------------------------------- //
-// ------------------------- Peter Cook Bulukin -----------------------------//
-// ------------------------------------------------------------------------- //
+// ----------------------- Function Definitions------------------------------//
+// ------------------------ Peter Cook Bulukin ----------------------------- //
 // ------------------------------------------------------------------------- //
 
 /**
@@ -3593,7 +3598,7 @@ void updateNeedleVelocity()														// To add Low-pass filter, I think a go
 		std::cerr << "Needle tip velocity retrieval failed" << std::endl;
 	needleVelocity = Vector3f(_tmpNeedleVelocity[0], _tmpNeedleVelocity[1], _tmpNeedleVelocity[2]);
 	needleAngularVelocity = Vector3f(_tmpAngVelocity[0], _tmpAngVelocity[1], _tmpAngVelocity[2]);
-	needleVelocityMagnitude = getVelocityMagnitude(_tmpNeedleVelocity);
+	needleVelocityMagnitude = needleVelocity.norm();
 
 }
 
@@ -3731,46 +3736,40 @@ float distance3d(Vector3f point1, Vector3f point2) {
 }
 
 /**
-* @brief Get the magnitude of a sim velocity vector.
-* @param velocity: A pointer to an array of 3 values representing the velocity.
-* @return the velocity magnitude
+* @brief Set the values of the graphs in v-rep
 */
-float getVelocityMagnitude(simFloat* velocity) {
-	return std::sqrt(std::pow(velocity[0], 2)
-		+ std::pow(velocity[1], 2)
-		+ std::pow(velocity[2], 2));
-}
-
-
-void setForceGraph()
+void setGraphs()
 {
-	simSetGraphUserData(needleForceGraphHandle, "external_force_magnitude", externalForceMagnitude);
-	float objectMatrixRefFrame[12];
-	simGetObjectMatrix(lwrTipHandle, -1, objectMatrixRefFrame);
-	Vector3f extf = changeBasis(objectMatrixRefFrame, lwrTipPhysicsEngineForce);
-	simSetGraphUserData(needleForceGraphHandle, "x", extf(0));
-	simSetGraphUserData(needleForceGraphHandle, "y", extf(1));
-	simSetGraphUserData(needleForceGraphHandle, "z", extf(2));
+	// Force graph
+	simSetGraphUserData(forceGraphHandle, "external_force_magnitude", externalForceMagnitude);
+	float _objectMatrixRefFrame[12];
+	simGetObjectMatrix(lwrTipHandle, -1, _objectMatrixRefFrame);
+	Vector3f extf = changeBasis(_objectMatrixRefFrame, lwrTipPhysicsEngineForce);
+	simSetGraphUserData(forceGraphHandle, "x", extf(0));
+	simSetGraphUserData(forceGraphHandle, "y", extf(1));
+	simSetGraphUserData(forceGraphHandle, "z", extf(2));
+
+	// Penetration Length Graph
 	for (sPuncture puncture : punctures)
 	{
 		if (puncture.name == "Fat") {
-			simSetGraphUserData(extForceGraphHandle, "fat_penetration", puncture.penetrationLength);
+			simSetGraphUserData(penetrationLengthGraphHandle, "fat_penetration", puncture.penetrationLength);
 		}
 		else if (puncture.name == "muscle")
 		{
-			simSetGraphUserData(extForceGraphHandle, "muscle_penetration", puncture.penetrationLength);
+			simSetGraphUserData(penetrationLengthGraphHandle, "muscle_penetration", puncture.penetrationLength);
 		}
 		else if (puncture.name == "lung")
 		{
-			simSetGraphUserData(extForceGraphHandle, "lung_penetration", puncture.penetrationLength);
+			simSetGraphUserData(penetrationLengthGraphHandle, "lung_penetration", puncture.penetrationLength);
 		}
 		else if (puncture.name == "bronchus")
 		{
-			simSetGraphUserData(extForceGraphHandle, "bronchus_penetration", puncture.penetrationLength);
+			simSetGraphUserData(penetrationLengthGraphHandle, "bronchus_penetration", puncture.penetrationLength);
 		}
 
 	}
-	simSetGraphUserData(extForceGraphHandle, "full_penetration", fullPenetrationLength);
+	simSetGraphUserData(penetrationLengthGraphHandle, "full_penetration", fullPenetrationLength);
 }
 
 
@@ -3841,13 +3840,13 @@ float KThresh(std::string name)
 }
 
 float kelvinVoigtModel() {
-	float f_magnitude = 0.0;
-	for (auto puncture_it = punctures.begin(); puncture_it != punctures.end(); puncture_it++)
+	float _forceMagnitude = 0.0;
+	for (auto punctureIt = punctures.begin(); punctureIt != punctures.end(); punctureIt++)
 	{
-		f_magnitude += (mu(*puncture_it) * A(puncture_it->penetrationLength));
+		_forceMagnitude += (mu(*punctureIt) * A(punctureIt->penetrationLength));
 	}
-	f_magnitude *= needleVelocityMagnitude;
-	return f_magnitude;
+	_forceMagnitude *= needleVelocityMagnitude;
+	return _forceMagnitude;
 }
 
 Vector3f simObjectMatrix2EigenDirection(const float* objectMatrix)
@@ -3880,10 +3879,10 @@ Vector3f changeBasis(const float* objectMatrixReferenceFrame, Vector3f vector)
 
 float generalForce2NeedleTipZ(Vector3f force)
 {
-	float lwr_tip_object_matrix[12];
-	simGetObjectMatrix(lwrTipHandle, -1, lwr_tip_object_matrix);
-	Vector3f lwr_tip_engine_force_tmp = changeBasis(lwr_tip_object_matrix, lwrTipPhysicsEngineForce);
-	return lwr_tip_engine_force_tmp.z();
+	float _lwrTipObjectMatrix[12];
+	simGetObjectMatrix(lwrTipHandle, -1, _lwrTipObjectMatrix);
+	Vector3f _lwrTipEngineForce = changeBasis(_lwrTipObjectMatrix, lwrTipPhysicsEngineForce);
+	return _lwrTipEngineForce.z();
 }
 
 float A(float x)
