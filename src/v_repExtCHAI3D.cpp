@@ -267,7 +267,14 @@ bool device_found = false;
 bool first_press_fake = true;
 float initial_dev_pos[3];
 
-													// Handles
+// ------------------------------------------------------------------------- //														From here is written by them
+// ------------------------------------------------------------------------- //
+// --------------------------- Global Variables -----------------------------//
+// -------------------------- Peter Cook Bulukin---------------------------- //
+// ------------------------------------------------------------------------- //
+
+
+// Handles
 int dummyHandle;									// This is the handle of the dummy device. That is the virtual 
 													// representation of the position of the haptic device in the scene.
 int dummyToolTipHandle;								// The tool tip dummy that is used to move the robot.
@@ -281,46 +288,46 @@ int needleForceGraphHandle;
 // CoppeliaSim object parameter IDs
 const int RESPONDABLE = 3004;                       // Object parameter id for toggling respondable.
 const int RESPONDABLE_MASK = 3019;                  // Object parameter id for toggling respondable mask.
-const float FRICTION_COEFFICIENT = 0.03;            // Unit: N/mm ? Delete this?
 
-													// Coefficients for bidirectional Karnopp friction model
+// Coefficients for bidirectional Karnopp friction model
 const float D_p = 18.45;                            // Positive static friction coefficient. Unit: N/m 
 const float D_n = -18.23;                           // Negative static friction coefficient. Unit: N/m
 const float b_p = 212.13;                           // Positive damping coefficient. Unit: N-s/m²
 const float b_n = -293.08;                          // Negative damping coefficient. Unit: N-s/m²
 const float C_p = 10.57;                            // Positive dynamic friction coefficient. Unit: N/m
 const float C_n = -11.96;                           // Negative dynamic friction coefficient. Unit: N/m
-const float zero_threshold = 5.0e-6;                // (delta v/2 in paper) Threshold on static and dynamic fricion. Unit: m/s
+const float zeroThreshold = 5.0e-6;                 // (delta v/2 in paper) Threshold on static and dynamic fricion. Unit: m/s
 
-													// Config variables: Use these to configurate the details of the execution.
-float engine_force_scalar = 1.0;					// How much of the v-rep engine force should be counted.
-float model_force_scalar = 1.0;						// How much of the calculated force should be used.
-std::string force_model = "kelvin-voigt";			// Which model should be used to model the forces.
-bool use_only_z_force_on_engine = true;				// When using the engine for both checking punctures and calculating forces, 
-													// Should only z direction be used, or should the full magnitude.
-bool enable_exit_tissue = true;
-bool constant_puncture_threshold = false;			// Use the same puncture threshold for all tissues.
-float puncture_threshold = 1.0e-2;					// Set constant puncture threshold (only used if constant_puncture_threshold==true)
-
-const float needle_radius = 2e-3;
-													// State variables
-bool virtual_fixture = false;						// Is the needle in the tissue/ should the virtual fixture be activated?
-float needleVelocity;
-float full_penetration_length;
-float f_ext_magnitude;								// Magnitude of all external forces on the needle.
-float lwr_tip_engine_force_magnitude = 0;			// Magnitude of external forces on the needle_tip created by the physics engine.
-Vector3f lwr_tip_enging_force = Vector3f(0.0, 0.0, 0.0); // Force vector of external forces on the needle_tip created by the physics engine.
-Vector3f f_ext;										// Total forces on the needle created by the physics engine AND the modeled forces, relative to the dummy.
-Vector3f toolTipPoint;
-Vector3f needleDirection;
-
+// Config variables: Use these to configurate the details of the execution.
+const float engineForceScalar = 1.0;				// How much of the v-rep engine force should be counted.
+const float modelForceScalar = 1.0;					// How much of the calculated force should be used.
+const std::string forceModel = "kelvin-voigt";		// Which model should be used to model the forces.
+const bool useOnlyZForceOnEngine = true;			// Should only z direction be used, or should the full magnitude of the force engine be used in calculations.
+													// When changed, force thresholds has to be tweaked to get similar functionailty.
+const bool enableExitTissue = true;					// Enable that tissues are enabeled when exiting the tissue. If false, severeal insertions in the same tissue are not possible in one simulation. 
+const bool constantPunctureThreshold = false;		// Use the same puncture threshold for all tissues.
+const float punctureThreshold = 1.0e-2;				// Set constant puncture threshold (only used if constantPunctureThreshold==true)
+const float needleRadius = 2e-3;					// Used in calculating Kelvin Voigt model
+													
+// State variables
+bool virtualFixture = false;									// This will be true when the needle is in the tissue.
+float needleVelocityMagnitude;											// Velocity of the needle, calculated from the LWR_tip in V-REP.
+float fullPenetrationLength;									// The total penetration length (length of needle covered by tissue)
+float externalForceMagnitude;									// Magnitude of all external forces on the needle. (Magnitude of externalForce)
+float lwrTipPhysisEngineForceMagnitude = 0;						// Magnitude of external forces on the Needle_tip created by the physics engine.
+Vector3f lwrTipPhysicsEngineForce = Vector3f(0.0, 0.0, 0.0);	// Force vector of external forces on the needle_tip created by the physics engine.
+Vector3f externalForce;											// Total forces on the needle created by the physics engine AND the modeled forces, relative to the dummy.
+Vector3f toolTipPos;											// Position of the needle tool tip. Calculated from the LWR_tip object in V-REP.
+Vector3f needleDirection;										// Direction of the needle calculated from the LWR_tip in V-REP.
+Vector3f needleVelocity;
+Vector3f needleAngularVelocity;
 
 struct sPuncture {
 	int handle;
 	Vector3f position;
 	Vector3f direction;
 	std::string name;
-	float penetration_length;
+	float penetrationLength;
 
 	void printPuncture(bool puncture) {
 		if (puncture) {
@@ -336,10 +343,17 @@ struct sPuncture {
 
 std::vector<sPuncture> punctures;
 
+// ---------------------------------------------------------------- //
+// ---------------------------------------------------------------- //
+// ------------------- FUNCTIONS DECLARATIONS ----------------------//
+// ----------------------Peter Cook Bulukin------------------------ //
+// ---------------------------------------------------------------- //
+
+
 void addPuncture(int handle);
 void checkContacts();
 void checkPunctures();
-void modelExternalForces(std::string force_model);
+void modelExternalForces(std::string forceModel);
 void reactivateTissues();
 void setAllTissuesRespondable();
 void setForceGraph();
@@ -356,7 +370,7 @@ float generalForce2NeedleTipZ(Vector3f force);
 float KThresh(std::string tissueName);
 float karnoppModel();
 float kelvinVoigtModel();
-float getVelocityMagnitude(simFloat* velocities);
+float getVelocityMagnitude(simFloat* velocity);
 float sgn(float x);
 Vector3f changeBasis(const float* objectMatrixReferenceFrame, Vector3f vector);
 Vector3f simContactInfo2EigenForce(const float* contactInfo);
@@ -2351,7 +2365,7 @@ VREP_DLLEXPORT void* v_repMessage(int message, int* auxiliaryData, void* customD
 		needleForceGraphHandle = simGetObjectHandle("Needle_force_graph");
 
 		lwrTipHandle = simGetObjectHandle("LWR_tip");
-		full_penetration_length = 0.0;
+		fullPenetrationLength = 0.0;
 		setAllTissuesRespondable();
 
 		//! In order to unbound the angular error
@@ -2551,11 +2565,11 @@ VREP_DLLEXPORT void* v_repMessage(int message, int* auxiliaryData, void* customD
 
 		if (punctures.size() == 0)
 		{
-			full_penetration_length = 0.0;
-			virtual_fixture = false;
+			fullPenetrationLength = 0.0;
+			virtualFixture = false;
 		}
 		else
-			virtual_fixture = true;
+			virtualFixture = true;
 
 		updateNeedleTipPos();
 		updateNeedleVelocity();
@@ -2565,7 +2579,7 @@ VREP_DLLEXPORT void* v_repMessage(int message, int* auxiliaryData, void* customD
 
 		checkContacts();
 
-		modelExternalForces(force_model);
+		modelExternalForces(forceModel);
 
 		setForceGraph();
 
@@ -3484,7 +3498,7 @@ sPuncture getPunctureFromName(std::string name)
 */
 float punctureLength(sPuncture puncture)
 {
-	Vector3f penetration = toolTipPoint - puncture.position;
+	Vector3f penetration = toolTipPos - puncture.position;
 	if (puncture.direction.dot(penetration) > 0)
 		return penetration.norm();
 	else
@@ -3493,7 +3507,7 @@ float punctureLength(sPuncture puncture)
 }
 
 /**
-* @brief Check if the needle is still in the puncture. This is where full_penetration_length is incremented.
+* @brief Check if the needle is still in the puncture. This is where fullPenetrationLength is incremented.
 */
 void checkPunctures()
 {
@@ -3504,11 +3518,11 @@ void checkPunctures()
 		// If puncture length is above zero, all punctures before it in the vector will be unchanged.
 		if (checkSinglePuncture(*it) > 0)
 		{
-			full_penetration_length -= it->penetration_length;
-			full_penetration_length += puncture_length;
+			fullPenetrationLength -= it->penetrationLength;
+			fullPenetrationLength += puncture_length;
 			// This penetration length might have been updated, so update.
-			it->penetration_length = puncture_length;
-			if (enable_exit_tissue) {
+			it->penetrationLength = puncture_length;
+			if (enableExitTissue) {
 				// Set punctures to be from the first puncture up until the current.
 				punctures = std::vector<sPuncture>(it, punctures.rend());
 				std::reverse(punctures.begin(), punctures.end());
@@ -3517,10 +3531,10 @@ void checkPunctures()
 		}
 		else {
 			// The needle isn't puncturing this tissue anymore. Set tissue respondable and print.
-			if (enable_exit_tissue)
+			if (enableExitTissue)
 			{
 				setRespondable(it->handle);
-				full_penetration_length -= it->penetration_length;
+				fullPenetrationLength -= it->penetrationLength;
 				it->printPuncture(false);
 			}
 			
@@ -3528,7 +3542,7 @@ void checkPunctures()
 
 	}
 	// No punctures had length > 0
-	if(enable_exit_tissue)
+	if(enableExitTissue)
 		punctures.clear();
 }
 
@@ -3558,7 +3572,7 @@ void setUnRespondable(int handle)
 * @return 1 if still active, -1 if not.
 */
 int checkSinglePuncture(sPuncture puncture) {
-	Vector3f current_translation = toolTipPoint - puncture.position;
+	Vector3f current_translation = toolTipPos - puncture.position;
 	// Return 1 if the distance is close to 0 so we get stability close to the puncture.
 	if (current_translation.norm() < 1e-4)
 		return 1;
@@ -3572,12 +3586,15 @@ int checkSinglePuncture(sPuncture puncture) {
 */
 void updateNeedleVelocity()														// To add Low-pass filter, I think a good place to add it would be here.
 {
-	simFloat tmp_needleVelocity[3];
-	simFloat tmp_angVelocity[3];
+	simFloat _tmpNeedleVelocity[3];
+	simFloat _tmpAngVelocity[3];
 	
-	if (simGetObjectVelocity(lwrTipHandle, tmp_needleVelocity, tmp_angVelocity) == -1)
+	if (simGetObjectVelocity(lwrTipHandle, _tmpNeedleVelocity, _tmpAngVelocity) == -1)
 		std::cerr << "Needle tip velocity retrieval failed" << std::endl;
-	needleVelocity = getVelocityMagnitude(tmp_needleVelocity);
+	needleVelocity = Vector3f(_tmpNeedleVelocity[0], _tmpNeedleVelocity[1], _tmpNeedleVelocity[2]);
+	needleAngularVelocity = Vector3f(_tmpAngVelocity[0], _tmpAngVelocity[1], _tmpAngVelocity[2]);
+	needleVelocityMagnitude = getVelocityMagnitude(_tmpNeedleVelocity);
+
 }
 
 /**
@@ -3598,7 +3615,7 @@ void updateNeedleTipPos()
 {
 	float needleTipPos[3];
 	simGetObjectPosition(lwrTipHandle, -1, needleTipPos);
-	toolTipPoint = Vector3f(needleTipPos[0], needleTipPos[1], needleTipPos[2]);
+	toolTipPos = Vector3f(needleTipPos[0], needleTipPos[1], needleTipPos[2]);
 }
 
 /**
@@ -3608,12 +3625,12 @@ void updateNeedleTipPos()
 void addPuncture(int handle)
 {
 	sPuncture puncture;
-	puncture.position = toolTipPoint;
+	puncture.position = toolTipPos;
 	puncture.direction = needleDirection;
 	puncture.handle = handle;
 	puncture.name = simGetObjectName(handle);
-	puncture.penetration_length = punctureLength(puncture);
-	full_penetration_length += puncture.penetration_length;
+	puncture.penetrationLength = punctureLength(puncture);
+	fullPenetrationLength += puncture.penetrationLength;
 	setUnRespondable(handle);
 	punctures.push_back(puncture);
 	puncture.printPuncture(true);
@@ -3625,8 +3642,8 @@ void addPuncture(int handle)
 void checkContacts()
 {
 
-	lwr_tip_engine_force_magnitude = 0.0;
-	lwr_tip_enging_force.setZero();
+	lwrTipPhysisEngineForceMagnitude = 0.0;
+	lwrTipPhysicsEngineForce.setZero();
 	for (int a = 0; a<20; a++)
 	{
 		simInt contactHandles[2];
@@ -3636,7 +3653,7 @@ void checkContacts()
 		{
 			Vector3f force = simContactInfo2EigenForce(contactInfo);
 			float force_magnitude;
-			if (use_only_z_force_on_engine)
+			if (useOnlyZForceOnEngine)
 				force_magnitude = generalForce2NeedleTipZ(force);
 			else
 				force_magnitude = force.norm();
@@ -3645,13 +3662,13 @@ void checkContacts()
 			simGetObjectIntParameter(contactHandles[1], RESPONDABLE, &respondableValue);
 			if (respondableValue != 0 && simGetObjectParent(contactHandles[1]) == phantomHandle)
 			{
-				lwr_tip_engine_force_magnitude += force_magnitude;
-				lwr_tip_enging_force += simContactInfo2EigenForce(contactInfo);
+				lwrTipPhysisEngineForceMagnitude += force_magnitude;
+				lwrTipPhysicsEngineForce += simContactInfo2EigenForce(contactInfo);
 			}
 
 
 			// Here we are supposed to use simGetObjectName to use K(), but there is something weird with the sim function that makes v-rep crash.
-			if (force_magnitude > constant_puncture_threshold && respondableValue != 0 && simGetObjectParent(contactHandles[1]) == phantomHandle) {
+			if (force_magnitude > constantPunctureThreshold && respondableValue != 0 && simGetObjectParent(contactHandles[1]) == phantomHandle) {
 				addPuncture(contactHandles[1]);
 				std::cout << "Force magnitude: " << force_magnitude << std::endl;
 			}
@@ -3671,36 +3688,36 @@ float sgn(float x) {
 }
 
 /**
-* @brief Model external forces that act upon the needle. Updates f_ext_magnitude and f_ext
+* @brief Model external forces that act upon the needle. Updates externalForceMagnitude and externalForce
 * @param model: string describing the model that should be used for modeling the forces
 */
 void modelExternalForces(std::string model) {
 
 	if (model == "kelvin-voigt") {
-		f_ext_magnitude = kelvinVoigtModel();
+		externalForceMagnitude = kelvinVoigtModel();
 	}
 	else if (model == "karnopp")
 	{
-		f_ext_magnitude = karnoppModel() * 0.1;
+		externalForceMagnitude = karnoppModel() * 0.1;
 	}
 	else
 	{
 		std::cout << "No valid friction model was chosen, automatically set Kelvin-Voigt" << std::endl;
-		f_ext_magnitude = kelvinVoigtModel();
+		externalForceMagnitude = kelvinVoigtModel();
 	}
-	f_ext_magnitude *= model_force_scalar;
+	externalForceMagnitude *= modelForceScalar;
 	// Obtain the forces in the z direction in the reference frame of the lwr needle tip.
 	// Add the z force to the magnitude of the forces
-	if (use_only_z_force_on_engine)
-		f_ext_magnitude += generalForce2NeedleTipZ(lwr_tip_enging_force) * engine_force_scalar;
+	if (useOnlyZForceOnEngine)
+		externalForceMagnitude += generalForce2NeedleTipZ(lwrTipPhysicsEngineForce) * engineForceScalar;
 	else
-		f_ext_magnitude += lwr_tip_enging_force.norm() * engine_force_scalar;
+		externalForceMagnitude += lwrTipPhysicsEngineForce.norm() * engineForceScalar;
 	// Get direction of the dummy so that the forces get distributed on all the axis. (They did this in the other project, but is this correct?)
 	// Shouldn't we rather map all the calculated forces onto the z direction of the needle? The other directions should be handled by the virtual fixture.
 	float dummy_object_matrix[12];
 	simGetObjectMatrix(dummyHandle, -1, dummy_object_matrix);
 	Vector3f dummy_dir = simObjectMatrix2EigenDirection(dummy_object_matrix).normalized();
-	f_ext = f_ext_magnitude * dummy_dir; // Should we normalize dir?				Peter: Multiplying with dummy dir creates equal force in all directions of the dummy. Is this right?
+	externalForce = externalForceMagnitude * dummy_dir; // Should we normalize dir?				Peter: Multiplying with dummy dir creates equal force in all directions of the dummy. Is this right?
 }
 
 /**
@@ -3727,49 +3744,49 @@ float getVelocityMagnitude(simFloat* velocity) {
 
 void setForceGraph()
 {
-	simSetGraphUserData(needleForceGraphHandle, "external_force_magnitude", f_ext_magnitude);
+	simSetGraphUserData(needleForceGraphHandle, "external_force_magnitude", externalForceMagnitude);
 	float objectMatrixRefFrame[12];
 	simGetObjectMatrix(lwrTipHandle, -1, objectMatrixRefFrame);
-	Vector3f extf = changeBasis(objectMatrixRefFrame, lwr_tip_enging_force);
+	Vector3f extf = changeBasis(objectMatrixRefFrame, lwrTipPhysicsEngineForce);
 	simSetGraphUserData(needleForceGraphHandle, "x", extf(0));
 	simSetGraphUserData(needleForceGraphHandle, "y", extf(1));
 	simSetGraphUserData(needleForceGraphHandle, "z", extf(2));
 	for (sPuncture puncture : punctures)
 	{
 		if (puncture.name == "Fat") {
-			simSetGraphUserData(extForceGraphHandle, "fat_penetration", puncture.penetration_length);
+			simSetGraphUserData(extForceGraphHandle, "fat_penetration", puncture.penetrationLength);
 		}
 		else if (puncture.name == "muscle")
 		{
-			simSetGraphUserData(extForceGraphHandle, "muscle_penetration", puncture.penetration_length);
+			simSetGraphUserData(extForceGraphHandle, "muscle_penetration", puncture.penetrationLength);
 		}
 		else if (puncture.name == "lung")
 		{
-			simSetGraphUserData(extForceGraphHandle, "lung_penetration", puncture.penetration_length);
+			simSetGraphUserData(extForceGraphHandle, "lung_penetration", puncture.penetrationLength);
 		}
 		else if (puncture.name == "bronchus")
 		{
-			simSetGraphUserData(extForceGraphHandle, "bronchus_penetration", puncture.penetration_length);
+			simSetGraphUserData(extForceGraphHandle, "bronchus_penetration", puncture.penetrationLength);
 		}
 
 	}
-	simSetGraphUserData(extForceGraphHandle, "full_penetration", full_penetration_length);
+	simSetGraphUserData(extForceGraphHandle, "full_penetration", fullPenetrationLength);
 }
 
 
 float karnoppModel()
 {
-	if (needleVelocity <= -zero_threshold) {
-		return full_penetration_length*(C_n*sgn(needleVelocity) + b_n*needleVelocity);
+	if (needleVelocityMagnitude <= -zeroThreshold) {
+		return fullPenetrationLength*(C_n*sgn(needleVelocityMagnitude) + b_n*needleVelocityMagnitude);
 	}
-	else if (-zero_threshold < needleVelocity && needleVelocity <= 0) {
-		return full_penetration_length * D_n;
+	else if (-zeroThreshold < needleVelocityMagnitude && needleVelocityMagnitude <= 0) {
+		return fullPenetrationLength * D_n;
 	}
-	else if (0 < needleVelocity && needleVelocity < zero_threshold) {
-		return full_penetration_length * D_p;
+	else if (0 < needleVelocityMagnitude && needleVelocityMagnitude < zeroThreshold) {
+		return fullPenetrationLength * D_p;
 	}
-	else if (needleVelocity >= zero_threshold) {
-		return full_penetration_length * (C_p*sgn(needleVelocity) + b_p*needleVelocity);
+	else if (needleVelocityMagnitude >= zeroThreshold) {
+		return fullPenetrationLength * (C_p*sgn(needleVelocityMagnitude) + b_p*needleVelocityMagnitude);
 	}
 	return -1;
 }
@@ -3827,9 +3844,9 @@ float kelvinVoigtModel() {
 	float f_magnitude = 0.0;
 	for (auto puncture_it = punctures.begin(); puncture_it != punctures.end(); puncture_it++)
 	{
-		f_magnitude += (mu(*puncture_it) * A(puncture_it->penetration_length));
+		f_magnitude += (mu(*puncture_it) * A(puncture_it->penetrationLength));
 	}
-	f_magnitude *= needleVelocity;
+	f_magnitude *= needleVelocityMagnitude;
 	return f_magnitude;
 }
 
@@ -3865,13 +3882,13 @@ float generalForce2NeedleTipZ(Vector3f force)
 {
 	float lwr_tip_object_matrix[12];
 	simGetObjectMatrix(lwrTipHandle, -1, lwr_tip_object_matrix);
-	Vector3f lwr_tip_engine_force_tmp = changeBasis(lwr_tip_object_matrix, lwr_tip_enging_force);
+	Vector3f lwr_tip_engine_force_tmp = changeBasis(lwr_tip_object_matrix, lwrTipPhysicsEngineForce);
 	return lwr_tip_engine_force_tmp.z();
 }
 
 float A(float x)
 {
-	return M_PI * needle_radius * x;
+	return M_PI * needleRadius * x;
 }
 
 void setAllTissuesRespondable()
