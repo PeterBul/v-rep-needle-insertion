@@ -303,7 +303,7 @@ const float zeroThreshold = 5.0e-6;                 // (delta v/2 in paper) Thre
 const float engineForceScalar = 1.0;				// How much of the v-rep engine force should be counted.
 const float modelForceScalar = 1.0;					// How much of the calculated force should be used.
 const std::string forceModel = "kelvin-voigt";		// Which model should be used to model the forces.
-const bool useOnlyZForceOnEngine = true;			// Should only z direction be used, or should the full magnitude of the force engine be used in calculations.
+const bool useOnlyZForceOnEngine = false;			// Should only z direction be used, or should the full magnitude of the force engine be used in calculations.
 													// When changed, force thresholds has to be tweaked to get similar functionailty.
 const bool enableExitTissue = true;					// Enable that tissues are enabeled when exiting the tissue. If false, severeal insertions in the same tissue are not possible in one simulation. 
 const bool constantPunctureThreshold = false;		// Use the same puncture threshold for all tissues.
@@ -3626,12 +3626,22 @@ void checkContacts()
 				lwrTipPhysicsEngineForce += simContactInfo2EigenForce(contactInfo);
 			}
 
+			if (simGetObjectParent(contactHandles[1]) == phantomHandle)
+			{
+				float threshold;
+				if (constantPunctureThreshold)
+					threshold = punctureThreshold;
+				else
+					threshold = KThresh(simGetObjectName(contactHandles[1]));
 
-			// Here we are supposed to use simGetObjectName to use K(), but there is something weird with the sim function that makes v-rep crash.
-			if (force_magnitude > constantPunctureThreshold && respondableValue != 0 && simGetObjectParent(contactHandles[1]) == phantomHandle) {
-				addPuncture(contactHandles[1]);
-				std::cout << "Force magnitude: " << force_magnitude << std::endl;
+				// Here we are supposed to use simGetObjectName to use K(), but there is something weird with the sim function that makes v-rep crash.
+				if (force_magnitude > threshold && respondableValue != 0) {
+					addPuncture(contactHandles[1]);
+					std::cout << "Force magnitude: " << force_magnitude << std::endl;
+				}
 			}
+			
+			
 
 
 		}
