@@ -3758,23 +3758,23 @@ float mu(sPuncture puncture)
 {
 	if (puncture.name == "Fat")
 	{
-		return 3.0f * 100.0f;
+		return 1.0f * 1.0e6f;
 	}
 	else if (puncture.name == "muscle")
 	{
-		return 3.0f * 100.0f;
+		return 4.0f * 1.0e6f;
 	}
 	else if (puncture.name == "lung")
 	{
-		return 3.0f * 100.0f;
+		return 2.0f * 1.0e6f;
 	}
 	else if (puncture.name == "bone")
 	{
-		return 30.0f * 100.05;
+		return 30.0f * 1.0e6f;
 	}
 	else
 	{
-		return 3.0f * 100.0f;
+		return 3.0f * 1.0e6f;
 	}
 }
 
