@@ -361,6 +361,7 @@ void setGraphs();
 void setRespondable(int handle);
 void setUnRespondable(int handle);
 void updateNeedleDirection();
+void updateNeedleState();
 void updateNeedleTipPos();
 void updateNeedleVelocity();
 int checkSinglePuncture(sPuncture puncture);
@@ -2355,7 +2356,7 @@ VREP_DLLEXPORT void* v_repMessage(int message, int* auxiliaryData, void* customD
 		lwr_needle_handler = simGetObjectHandle("Needle");
 
 
-		// Peter
+		// -------------------- Peter ------------------------
 		// Handles
 		dummyHandle = simGetObjectHandle("Dummy_device");
 		dummyToolTipHandle = simGetObjectHandle("Dummy_tool_tip");
@@ -2372,6 +2373,8 @@ VREP_DLLEXPORT void* v_repMessage(int message, int* auxiliaryData, void* customD
 		fullPenetrationLength = 0.0;
 		// Init all tissues to respondable
 		setAllTissuesRespondable();
+
+		// -------------------- Peter end --------------------
 
 		//! In order to unbound the angular error
 		lwr_tip_T.setZero();
@@ -2407,61 +2410,6 @@ VREP_DLLEXPORT void* v_repMessage(int message, int* auxiliaryData, void* customD
 		float scaled_device_T[12];
 		eigen2SimTransf(temp, scaled_device_T);
 		simSetObjectMatrix(dummy_handler, -1, scaled_device_T);
-
-		// TISSUE INIT					Peter: I have commented this out because we don't have any of the tissue structure anymore
-		/*Vector3f tissue_center;
-		Vector2f tissue_scale;
-		tissue_center << 0.15f, 0.5f, 0.37f;
-		tissue_scale << 0.2f, 0.22f;
-		tis.init();
-
-		Vector3fVector colors;
-		colors = { Vector3f(1.0f, 0.76f, 0.51f),
-			Vector3f(1.0f, 1.0f, 0.51f),
-			Vector3f(0.77f, 0.3f, 0.3f),
-			Vector3f(1.0f, 1.0f, 0.81f) };
-
-
-
-		if (use_default_tissue_values)
-		{
-			tis.addLayer("Skin",	0.12f * 0.3f,	331.0f	/ 10.0f,		3.0f * 50.0f,	0.4f,	Vector3f(1.0f, 0.76f, 0.51f));
-			tis.addLayer("Fat",		0.13f * 0.3f,	83.0f	/ 10.0f,		1.0f * 50.0f,	0.1f,	Vector3f(1.0f, 1.0f, 0.51f));
-			tis.addLayer("Muscle",	0.14f * 0.3f,	497.0f	/ 10.0f,		3.0f * 50.0f,	0.25f,	Vector3f(0.77f, 0.3f, 0.3f));
-			tis.addLayer("Bone",	0.12f * 0.3f,	1300.0f	/ 20.0f,		0.0f * 50.0f,	0.9f,	Vector3f(1.0f, 1.0f, 0.81f));
-			//tis.addLayer("Bone", 0.12f * 0.2f, 2480.0f / 100.0f, 0.0f * 10.0f, 0.9f, Vector3f(1.0f, 1.0f, 0.81f));
-		}
-		else
-		{
-			for (unsigned int i = 0; i < UI_layers_names.size(); i++)
-				tis.addLayer(UI_layers_names[i],
-					UI_thick_vec(i) * 1000.0f,
-					UI_K_vec(i) / 100.0f,
-					UI_B_vec(i) * 10.0f,
-					UI_p_t_p_vec(i),
-					colors[i]);
-		}
-
-
-		tis.setTissueCenter(tissue_center);
-		tis.setScale(tissue_scale(0), tissue_scale(1));
-		
-		tis.printTissue();
-		tis.renderLayers();
-		tis.getAllLayerParam(thick, K, B, p_thick);
-
-		// Add a plane to substain the tissues
-		float plane_color[3] = { 0.6f, 0.3f, 0.0f };
-		//float trasparency[1] = { 0.2f };
-		float tissue_depth = tis.getTotalDepth();
-		float plane_size[3] = { tissue_scale(0) * 2.0f, tissue_scale(1) * 2.0f, 0.04f };
-		float plane_pos[3] = { tissue_center(0), tissue_center(1), tissue_center(2) - tissue_depth * 0.5f - plane_size[2] * 0.5f };
-		int plane_handler = simCreatePureShape(0, 1 + 4 + 8 + 16, plane_size, 1.0f, NULL);
-		simSetObjectPosition(plane_handler, -1, plane_pos);
-		simSetShapeColor(plane_handler, NULL, sim_colorcomponent_ambient_diffuse, plane_color);
-		//simSetShapeColor(plane_handler, NULL, sim_colorcomponent_transparency, trasparency);
-		simSetObjectName(plane_handler, "Desk");
-		*/
 
 		// retrieve JOINT HANDLERS
 		std::string temp_name;
@@ -2576,16 +2524,11 @@ VREP_DLLEXPORT void* v_repMessage(int message, int* auxiliaryData, void* customD
 		else
 			virtualFixture = true;
 
-		updateNeedleTipPos();
-		updateNeedleVelocity();
-		updateNeedleDirection();
-
+		//Peter
+		updateNeedleState();
 		checkPunctures();
-
 		checkContacts();
-
 		modelExternalForces(forceModel);
-
 		setGraphs();
 
 		// If a new button is clicked and the last button was not 0
@@ -3022,7 +2965,11 @@ void computeGlobalForce(void)
 	Vector3f lwr_needle_pos;
 	Vector3f x_md, x_md_dot;
 
-
+	// Peter
+	// To use my external force, use externalForce instead of lwr_tip_external_F it looks like.
+	// A simpler way would maybe just to set the global force to the external force.
+	// Why do they apply K and B again? They apply this when calculating external force
+	
 	//! TELEOPERATION
 	switch (controller_ID)
 	{
@@ -3030,6 +2977,7 @@ void computeGlobalForce(void)
 		// Pos/Force-Pos (Non-uniform matrix port)
 		// lwr_tip_external force calculated in computeExternalForce
 		// Diff device LPF and LWR Tip LPF is the LPFiltered velocity difference of the device and the lwr_tip
+		
 		F_mc = (K_m * lwr_tip_external_F) - (B_m * (device_LPF_vel - lwr_tip_LPF_vel));
 		break;
 	case 2:
@@ -3623,6 +3571,13 @@ void updateNeedleTipPos()
 	toolTipPos = Vector3f(needleTipPos[0], needleTipPos[1], needleTipPos[2]);
 }
 
+void updateNeedleState()
+{
+	updateNeedleDirection();
+	updateNeedleTipPos();
+	updateNeedleVelocity();
+}
+
 /**
 * @brief Add new puncture to punctures
 * @param handle: handle of tissue that was punctured
@@ -3772,7 +3727,10 @@ void setGraphs()
 	simSetGraphUserData(penetrationLengthGraphHandle, "full_penetration", fullPenetrationLength);
 }
 
-
+/**
+* @brief Karnopp friction model
+* @return current friction value
+*/
 float karnoppModel()
 {
 	if (needleVelocityMagnitude <= -zeroThreshold) {
@@ -3790,6 +3748,12 @@ float karnoppModel()
 	return -1;
 }
 
+
+/**
+* @brief viscosity constant for the different tissues
+* @param puncture: a puncture
+* @return the value of the constant
+*/
 float mu(sPuncture puncture)
 {
 	if (puncture.name == "Fat")
@@ -3814,6 +3778,11 @@ float mu(sPuncture puncture)
 	}
 }
 
+/**
+* @brief threshold for when the needle should penetrate the tissue
+* @param name: name of the tissue (the one set in V-REP)
+* @return the threshold value for that tissue
+*/
 float KThresh(std::string name)
 {
 	if (name == "Fat")
@@ -3839,6 +3808,10 @@ float KThresh(std::string name)
 	}
 }
 
+/**
+* @brief calculate kelvin-voigt interaction force model
+* @return the force magnitude of the interaction
+*/
 float kelvinVoigtModel() {
 	float _forceMagnitude = 0.0;
 	for (auto punctureIt = punctures.begin(); punctureIt != punctures.end(); punctureIt++)
@@ -3855,6 +3828,9 @@ Vector3f simObjectMatrix2EigenDirection(const float* objectMatrix)
 }
 
 
+/**
+* @brief reactivate all tissues
+*/
 void reactivateTissues()
 {
 	std::cout << punctures.size() << std::endl;
@@ -3865,11 +3841,23 @@ void reactivateTissues()
 	punctures.clear();
 }
 
+
+/**
+* @brief get the force as a Vector3f from the return of simGetContactInfo
+* @param contactInfo: contact info retrieved from v-rep
+* @return the force in Vector3f format
+*/
 Vector3f simContactInfo2EigenForce(const float* contactInfo)
 {
 	return Vector3f(contactInfo[3], contactInfo[4], contactInfo[5]);
 }
 
+/**
+* @brief change the basis going from the global reference frame to a specific one
+* @param objectMatrixReferenceFrame: object matrix retrieved from v-rep representing the reference frame you want to go to.
+* @param vector: the vector you want to map to another reference frame
+* @return a Vector3f representing the mapped vector
+*/
 Vector3f changeBasis(const float* objectMatrixReferenceFrame, Vector3f vector)
 {
 	float quat[4];
@@ -3877,6 +3865,11 @@ Vector3f changeBasis(const float* objectMatrixReferenceFrame, Vector3f vector)
 	return Quaternionf(quat[0], quat[1], quat[2], quat[3]) * vector;
 }
 
+/**
+* @brief rotate a force in the general reference frame to the reference frame of the needle tip and retrieve only the z value.
+* @param force: the force vector
+* @return the force in the z direction of the needle
+*/
 float generalForce2NeedleTipZ(Vector3f force)
 {
 	float _lwrTipObjectMatrix[12];
@@ -3885,11 +3878,18 @@ float generalForce2NeedleTipZ(Vector3f force)
 	return _lwrTipEngineForce.z();
 }
 
+/**
+* @brief the area of the needle covered by tissue given length of needle covered
+* @return the area of the needle covered
+*/
 float A(float x)
 {
 	return M_PI * needleRadius * x;
 }
 
+/** 
+* @brief set all tissues respondable
+*/
 void setAllTissuesRespondable()
 {
 	int idx = 0;
