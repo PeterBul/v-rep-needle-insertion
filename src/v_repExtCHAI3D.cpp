@@ -3595,7 +3595,7 @@ void addPuncture(int handle)
 	puncture.position = toolTipPos;
 	puncture.direction = needleDirection;
 	puncture.handle = handle;
-	puncture.name = simGetObjectName(handle);
+	puncture.name = handle2Name[handle];
 	puncture.penetrationLength = punctureLength(puncture);
 	fullPenetrationLength += puncture.penetrationLength;
 	setUnRespondable(handle);
@@ -3871,7 +3871,7 @@ void reactivateTissues()
 	std::cout << punctures.size() << std::endl;
 	for (sPuncture puncture : punctures) {
 		simSetObjectIntParameter(puncture.handle, RESPONDABLE, 1);
-		std::cout << "Reactivated respondable for object " << simGetObjectName(puncture.handle) << std::endl;
+		std::cout << "Reactivated respondable for object " <<puncture.name << std::endl;
 	}
 	punctures.clear();
 }
