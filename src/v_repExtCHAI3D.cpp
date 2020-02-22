@@ -310,7 +310,25 @@ const bool enableExitTissue = true;					// Enable that tissues are enabeled when
 const bool constantPunctureThreshold = false;		// Use the same puncture threshold for all tissues.
 const float punctureThreshold = 1.0e-2;				// Set constant puncture threshold (only used if constantPunctureThreshold==true)
 const float needleRadius = 2e-3;					// Used in calculating Kelvin Voigt model
-													
+
+// Kelvin-Voigt Params
+map<string, float> kelvinMu = {
+	{ "Fat", 1.0e6f },
+	{ "muscle", 4.0e6f },
+	{ "lung", 2.0e6f },
+	{ "bone", 30.0e6f },
+	{ "default", 3.0e6f }
+};
+
+map<string, float> kelvinKThresh = {
+	{ "Fat", 1.0e-2 },
+	{ "muscle", 1.0e-3 },
+	{ "lung", 1.0e-3 },
+	{ "bone", 1.0 },
+	{ "default", 1.0e-3 }
+};
+
+
 // State variables
 bool virtualFixture = false;									// This will be true when the needle is in the tissue.
 float needleVelocityMagnitude;											// Velocity of the needle, calculated from the LWR_tip in V-REP.
@@ -323,8 +341,8 @@ Vector3f toolTipPos;											// Position of the needle tool tip. Calculated fr
 Vector3f needleDirection;										// Direction of the needle calculated from the LWR_tip in V-REP.
 Vector3f needleVelocity;
 Vector3f needleAngularVelocity;
-map<int, string> handle2Name;
 
+// Utility structures
 struct sPuncture {
 	int handle;
 	Vector3f position;
@@ -344,6 +362,7 @@ struct sPuncture {
 	}
 };
 
+map<int, string> handle2Name;
 std::vector<sPuncture> punctures;
 
 // ---------------------------------------------------------------- //
@@ -3791,25 +3810,14 @@ float karnoppModel()
 */
 float mu(sPuncture puncture)
 {
-	if (puncture.name == "Fat")
+	map<string, float>::iterator muIt = kelvinMu.find(puncture.name);
+	if (muIt != kelvinMu.end())
 	{
-		return 1.0f * 1.0e6f;
-	}
-	else if (puncture.name == "muscle")
-	{
-		return 4.0f * 1.0e6f;
-	}
-	else if (puncture.name == "lung")
-	{
-		return 2.0f * 1.0e6f;
-	}
-	else if (puncture.name == "bone")
-	{
-		return 30.0f * 1.0e6f;
+		return muIt->second;
 	}
 	else
 	{
-		return 3.0f * 1.0e6f;
+		return kelvinMu["default"];
 	}
 }
 
@@ -3820,26 +3828,14 @@ float mu(sPuncture puncture)
 */
 float KThresh(std::string name)
 {
-	if (name == "Fat")
+	map<string, float>::iterator kIt = kelvinKThresh.find(name);
+	if (kIt != kelvinKThresh.end())
 	{
-		return 1.0e-2;
-	}
-
-	else if (name == "muscle")
-	{
-		return 1.0e-3;
-	}
-	else if (name == "lung")
-	{
-		return 1.0e-3;
-	}
-	else if (name == "bone")
-	{
-		return 1.0;
+		return kIt->second;
 	}
 	else
 	{
-		return 1.0e-2;
+		return kelvinKThresh["default"];
 	}
 }
 
