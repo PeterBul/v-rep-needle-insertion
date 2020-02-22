@@ -49,6 +49,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <ctime>
 #include <ratio>
 #include <math.h>
+#include <set>
 #include <queue>
 #include <vector>
 //#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
@@ -322,6 +323,7 @@ Vector3f toolTipPos;											// Position of the needle tool tip. Calculated fr
 Vector3f needleDirection;										// Direction of the needle calculated from the LWR_tip in V-REP.
 Vector3f needleVelocity;
 Vector3f needleAngularVelocity;
+map<int, string> handle2Name;
 
 struct sPuncture {
 	int handle;
@@ -356,6 +358,7 @@ void checkContacts();
 void checkPunctures();
 void modelExternalForces(std::string forceModel);
 void reactivateTissues();
+void initAllTissueNames();
 void setAllTissuesRespondable();
 void setGraphs();
 void setRespondable(int handle);
@@ -2306,6 +2309,7 @@ VREP_DLLEXPORT void* v_repMessage(int message, int* auxiliaryData, void* customD
 	// ------------------------------------------------------------------------- //
 	if (message == sim_message_eventcallback_simulationabouttostart)
 	{
+		
 		t_0 = std::chrono::high_resolution_clock::now();
 
 		// Initialize the device
@@ -2369,10 +2373,13 @@ VREP_DLLEXPORT void* v_repMessage(int message, int* auxiliaryData, void* customD
 		needleForceGraphHandle = simGetObjectHandle("Needle_force_graph");
 		penetrationLengthGraphHandle = simGetObjectHandle("Penetration_length_graph");
 
+
 		// Init full penetration to 0
 		fullPenetrationLength = 0.0;
 		// Init all tissues to respondable
 		setAllTissuesRespondable();
+		// Retrieve all tissue names
+		initAllTissueNames();
 
 		// -------------------- Peter end --------------------
 
@@ -3604,47 +3611,65 @@ void checkContacts()
 
 	lwrTipPhysisEngineForceMagnitude = 0.0;
 	lwrTipPhysicsEngineForce.setZero();
-	for (int a = 0; a<20; a++)
+	int steps;
+	simGetIntegerParameter(sim_intparam_dynamic_step_divider, &steps);
+
+	map<int, Vector3f> forces;
+	// Iterate through all the steps of the dynamic engine
+	for (int a = 0; a<steps; a++)
 	{
+		// Get contact info
 		simInt contactHandles[2];
 		simFloat contactInfo[6];
+		int respondableValue;
 		simGetContactInfo(sim_handle_all, needleHandle, a, contactHandles, contactInfo);
-		if (contactHandles[1] < 1000)
+		simGetObjectIntParameter(contactHandles[1], RESPONDABLE, &respondableValue);
+		// The forces are only valid if the object is a child of the phantom. Check also if contact handle is below 1000 because v-rep can return a random number on no contact.
+		// Check if object is respondable
+		if (contactHandles[1] < 1000 && simGetObjectParent(contactHandles[1]) == phantomHandle && respondableValue != 0)
 		{
+			// Turn the force into a Vector3f
 			Vector3f force = simContactInfo2EigenForce(contactInfo);
-			float force_magnitude;
-			if (useOnlyZForceOnEngine)
-				force_magnitude = generalForce2NeedleTipZ(force);
+			// Calculate force magnitude (maybe do this in the end?)
+			map<int, Vector3f>::iterator forceIt = forces.find(contactHandles[1]);
+			if (forceIt != forces.end())
+				forceIt->second += force;
 			else
-				force_magnitude = force.norm();
-
-			int respondableValue;
-			simGetObjectIntParameter(contactHandles[1], RESPONDABLE, &respondableValue);
-			if (respondableValue != 0 && simGetObjectParent(contactHandles[1]) == phantomHandle)
-			{
-				lwrTipPhysisEngineForceMagnitude += force_magnitude;
-				lwrTipPhysicsEngineForce += simContactInfo2EigenForce(contactInfo);
-			}
-
-			if (simGetObjectParent(contactHandles[1]) == phantomHandle)
-			{
-				float threshold;
-				if (constantPunctureThreshold)
-					threshold = punctureThreshold;
-				else
-					threshold = KThresh(simGetObjectName(contactHandles[1]));
-
-				// Here we are supposed to use simGetObjectName to use K(), but there is something weird with the sim function that makes v-rep crash.
-				if (force_magnitude > threshold && respondableValue != 0) {
-					addPuncture(contactHandles[1]);
-					std::cout << "Force magnitude: " << force_magnitude << std::endl;
-				}
-			}
-			
-			
-
+				forces[contactHandles[1]] = force;
 
 		}
+	}
+
+	// Init threshold to be the constant threshold
+	float threshold = punctureThreshold;
+	map<int, Vector3f>::iterator it;
+	for (it = forces.begin(); it != forces.end(); it++)
+	{
+		int handle = it->first;
+		Vector3f force = it->second;
+
+		// Add forces to the total forces
+		// Check if full force should be used in force magnitude
+		float force_magnitude;
+		if (useOnlyZForceOnEngine)
+			force_magnitude = generalForce2NeedleTipZ(force);
+		else
+			force_magnitude = force.norm();
+		lwrTipPhysicsEngineForce += force;
+		lwrTipPhysisEngineForceMagnitude += force_magnitude;
+		// If variable thresholds are used, set K threshold
+		if (!constantPunctureThreshold)
+		{
+			string tissueName = handle2Name[handle];
+			threshold = KThresh(tissueName);
+		}
+		if (force_magnitude > threshold)
+		{
+			addPuncture(handle);
+			std::cout << "Force magnitude: " << force_magnitude << std::endl;
+		}
+		
+
 	}
 }
 
@@ -3802,11 +3827,11 @@ float KThresh(std::string name)
 
 	else if (name == "muscle")
 	{
-		return 1.0e-2;
+		return 1.0e-3;
 	}
 	else if (name == "lung")
 	{
-		return 1.0e-2;
+		return 1.0e-3;
 	}
 	else if (name == "bone")
 	{
@@ -3907,6 +3932,21 @@ void setAllTissuesRespondable()
 	while (tissueHandle != -1)
 	{
 		setRespondable(tissueHandle);
+		idx++;
+		tissueHandle = simGetObjectChild(phantomHandle, idx);
+	}
+}
+
+/**
+* @brief initialise handle2Name with all tissue names
+*/
+void initAllTissueNames()
+{
+	int idx = 0;
+	int tissueHandle = simGetObjectChild(phantomHandle, idx);
+	while (tissueHandle != -1)
+	{
+		handle2Name[tissueHandle] = simGetObjectName(tissueHandle);
 		idx++;
 		tissueHandle = simGetObjectChild(phantomHandle, idx);
 	}
